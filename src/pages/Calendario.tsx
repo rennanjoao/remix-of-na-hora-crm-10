@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { toast } from 'sonner';
-import { Loader2, Plus, ChevronLeft, ChevronRight, CalendarIcon, Clock, Check } from 'lucide-react';
+import { Loader2, Plus, ChevronLeft, ChevronRight, CalendarIcon, Check, Video, ExternalLink } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, isToday, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -29,6 +29,18 @@ interface Task {
   lead_id: string | null;
 }
 
+interface Meeting {
+  id: string;
+  title: string;
+  description: string | null;
+  meeting_date: string;
+  duration_minutes: number;
+  jitsi_link: string;
+  contact_name: string | null;
+  sdr_id: string;
+  lead_id: string;
+}
+
 interface Profile {
   id: string;
   full_name: string | null;
@@ -36,18 +48,42 @@ interface Profile {
 
 type ViewMode = 'month' | 'week' | 'day';
 
+// Colors for different SDRs
+const SDR_COLORS = [
+  'bg-blue-500 text-white',
+  'bg-emerald-500 text-white',
+  'bg-violet-500 text-white',
+  'bg-amber-500 text-white',
+  'bg-rose-500 text-white',
+  'bg-cyan-500 text-white',
+  'bg-fuchsia-500 text-white',
+  'bg-lime-500 text-white',
+];
+
+type CalendarEvent = {
+  type: 'task';
+  data: Task;
+  date: Date;
+} | {
+  type: 'meeting';
+  data: Meeting;
+  date: Date;
+};
+
 export default function Calendario() {
   const { profile, isAdmin, isGerente, isSDR } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [sdrs, setSdrs] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [selectedSDR, setSelectedSDR] = useState<string>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [meetingDetailOpen, setMeetingDetailOpen] = useState(false);
+  const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
 
-  // New task form
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
@@ -58,44 +94,60 @@ export default function Calendario() {
 
   const canViewAllCalendars = isAdmin || isGerente;
 
+  // SDR color map
+  const sdrColorMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    sdrs.forEach((sdr, i) => {
+      map[sdr.id] = SDR_COLORS[i % SDR_COLORS.length];
+    });
+    // For current user if not in sdrs list
+    if (profile && !map[profile.id]) {
+      map[profile.id] = SDR_COLORS[0];
+    }
+    return map;
+  }, [sdrs, profile]);
+
   const fetchTasks = async () => {
-    setLoading(true);
     try {
       let query = supabase.from('tasks').select('*');
-
-      // If not admin/gerente, only fetch own tasks
       if (!canViewAllCalendars && profile) {
         query = query.eq('assigned_to', profile.id);
       }
-
       const { data, error } = await query.order('start_time', { ascending: true });
       if (error) throw error;
       setTasks(data || []);
     } catch (error) {
       console.error('Error fetching tasks:', error);
-      toast.error('Erro ao carregar tarefas');
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  const fetchMeetings = async () => {
+    try {
+      let query = supabase.from('meetings').select('*');
+      if (!canViewAllCalendars && profile) {
+        query = query.eq('sdr_id', profile.id);
+      }
+      const { data, error } = await query.order('meeting_date', { ascending: true });
+      if (error) throw error;
+      setMeetings(data || []);
+    } catch (error) {
+      console.error('Error fetching meetings:', error);
     }
   };
 
   const fetchSDRs = async () => {
     if (!canViewAllCalendars) return;
-
     try {
-      // Fetch all profiles that are SDRs
       const { data: roles } = await supabase
         .from('user_roles')
         .select('user_id')
         .eq('role', 'sdr');
-
       if (roles && roles.length > 0) {
         const userIds = roles.map(r => r.user_id);
         const { data: profiles } = await supabase
           .from('profiles')
           .select('id, full_name')
           .in('user_id', userIds);
-
         setSdrs(profiles || []);
       }
     } catch (error) {
@@ -104,18 +156,20 @@ export default function Calendario() {
   };
 
   useEffect(() => {
-    fetchTasks();
-    fetchSDRs();
+    const load = async () => {
+      setLoading(true);
+      await Promise.all([fetchTasks(), fetchMeetings(), fetchSDRs()]);
+      setLoading(false);
+    };
+    load();
   }, [profile, canViewAllCalendars]);
 
   const createTask = async () => {
     if (!profile || !newTask.title.trim() || !selectedDate) return;
-
     try {
       const startTime = newTask.start_time 
         ? new Date(`${format(selectedDate, 'yyyy-MM-dd')}T${newTask.start_time}`)
         : selectedDate;
-
       const endTime = newTask.end_time
         ? new Date(`${format(selectedDate, 'yyyy-MM-dd')}T${newTask.end_time}`)
         : null;
@@ -131,7 +185,6 @@ export default function Calendario() {
       });
 
       if (error) throw error;
-
       toast.success('Tarefa criada!');
       setDialogOpen(false);
       setNewTask({ title: '', description: '', start_time: '', end_time: '', all_day: false });
@@ -149,25 +202,37 @@ export default function Calendario() {
         .from('tasks')
         .update({ completed: !completed })
         .eq('id', taskId);
-
       if (error) throw error;
-
-      setTasks(prev => prev.map(t => 
-        t.id === taskId ? { ...t, completed: !completed } : t
-      ));
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: !completed } : t));
     } catch (error) {
       console.error('Error updating task:', error);
-      toast.error('Erro ao atualizar tarefa');
     }
   };
 
-  // Filter tasks by selected SDR
+  // Filter by SDR
   const filteredTasks = useMemo(() => {
     if (selectedSDR === 'all') return tasks;
     return tasks.filter(t => t.assigned_to === selectedSDR);
   }, [tasks, selectedSDR]);
 
-  // Get days for calendar
+  const filteredMeetings = useMemo(() => {
+    if (selectedSDR === 'all') return meetings;
+    return meetings.filter(m => m.sdr_id === selectedSDR);
+  }, [meetings, selectedSDR]);
+
+  // Get events for a specific day
+  const getEventsForDay = (date: Date): CalendarEvent[] => {
+    const taskEvents: CalendarEvent[] = filteredTasks
+      .filter(task => isSameDay(new Date(task.start_time), date))
+      .map(task => ({ type: 'task' as const, data: task, date }));
+
+    const meetingEvents: CalendarEvent[] = filteredMeetings
+      .filter(meeting => isSameDay(new Date(meeting.meeting_date), date))
+      .map(meeting => ({ type: 'meeting' as const, data: meeting, date }));
+
+    return [...meetingEvents, ...taskEvents];
+  };
+
   const calendarDays = useMemo(() => {
     if (viewMode === 'month') {
       const start = startOfWeek(startOfMonth(currentDate), { locale: ptBR });
@@ -182,13 +247,6 @@ export default function Calendario() {
     }
   }, [currentDate, viewMode]);
 
-  // Get tasks for a specific day
-  const getTasksForDay = (date: Date) => {
-    return filteredTasks.filter(task => 
-      isSameDay(new Date(task.start_time), date)
-    );
-  };
-
   const navigate = (direction: 'prev' | 'next') => {
     if (viewMode === 'month') {
       setCurrentDate(direction === 'prev' ? subMonths(currentDate, 1) : addMonths(currentDate, 1));
@@ -197,6 +255,11 @@ export default function Calendario() {
     } else {
       setCurrentDate(direction === 'prev' ? addDays(currentDate, -1) : addDays(currentDate, 1));
     }
+  };
+
+  const getSdrName = (sdrId: string) => {
+    const sdr = sdrs.find(s => s.id === sdrId);
+    return sdr?.full_name?.split(' ')[0] || '';
   };
 
   if (loading) {
@@ -249,9 +312,7 @@ export default function Calendario() {
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Nova Tarefa</DialogTitle>
-                  <DialogDescription>
-                    Agende uma nova tarefa ou reunião
-                  </DialogDescription>
+                  <DialogDescription>Agende uma nova tarefa ou reunião</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 pt-4">
                   <div className="space-y-2">
@@ -276,10 +337,7 @@ export default function Calendario() {
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal",
-                            !selectedDate && "text-muted-foreground"
-                          )}
+                          className={cn("w-full justify-start text-left font-normal", !selectedDate && "text-muted-foreground")}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
                           {selectedDate ? format(selectedDate, "PPP", { locale: ptBR }) : <span>Selecione a data</span>}
@@ -327,6 +385,18 @@ export default function Calendario() {
           </div>
         </div>
 
+        {/* SDR Color Legend */}
+        {canViewAllCalendars && sdrs.length > 0 && selectedSDR === 'all' && (
+          <div className="flex flex-wrap gap-3">
+            {sdrs.map((sdr, i) => (
+              <div key={sdr.id} className="flex items-center gap-2">
+                <div className={cn("w-3 h-3 rounded-full", SDR_COLORS[i % SDR_COLORS.length].split(' ')[0])} />
+                <span className="text-sm text-muted-foreground">{sdr.full_name?.split(' ')[0] || 'SDR'}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Calendar Card */}
         <Card>
           <CardHeader>
@@ -357,14 +427,12 @@ export default function Calendario() {
             </div>
           </CardHeader>
           <CardContent>
-            {/* Calendar Grid */}
             <div className={cn(
               "grid gap-1",
               viewMode === 'month' && "grid-cols-7",
               viewMode === 'week' && "grid-cols-7",
               viewMode === 'day' && "grid-cols-1"
             )}>
-              {/* Day Headers */}
               {viewMode !== 'day' && (
                 ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day) => (
                   <div key={day} className="py-2 text-center text-sm font-medium text-muted-foreground">
@@ -373,9 +441,8 @@ export default function Calendario() {
                 ))
               )}
 
-              {/* Calendar Days */}
               {calendarDays.map((day, index) => {
-                const dayTasks = getTasksForDay(day);
+                const dayEvents = getEventsForDay(day);
                 const isCurrentMonth = isSameMonth(day, currentDate);
                 const isCurrentDay = isToday(day);
 
@@ -396,29 +463,61 @@ export default function Calendario() {
                       {format(day, viewMode === 'day' ? "EEEE, d 'de' MMMM" : 'd', { locale: ptBR })}
                     </div>
                     <div className="space-y-1">
-                      {dayTasks.slice(0, viewMode === 'day' ? undefined : 3).map((task) => (
-                        <div
-                          key={task.id}
-                          className={cn(
-                            "calendar-event flex items-center gap-1",
-                            task.completed 
-                              ? "bg-muted text-muted-foreground line-through" 
-                              : "bg-primary text-primary-foreground"
-                          )}
-                          onClick={() => toggleTaskComplete(task.id, task.completed)}
-                        >
-                          {task.completed && <Check className="h-3 w-3" />}
-                          {!task.all_day && (
-                            <span className="text-[10px] opacity-80">
-                              {format(new Date(task.start_time), 'HH:mm')}
-                            </span>
-                          )}
-                          <span className="truncate">{task.title}</span>
-                        </div>
-                      ))}
-                      {viewMode !== 'day' && dayTasks.length > 3 && (
+                      {dayEvents.slice(0, viewMode === 'day' ? undefined : 3).map((event) => {
+                        if (event.type === 'meeting') {
+                          const meeting = event.data;
+                          const colorClass = sdrColorMap[meeting.sdr_id] || SDR_COLORS[0];
+                          return (
+                            <div
+                              key={`m-${meeting.id}`}
+                              className={cn(
+                                "calendar-event flex items-center gap-1 cursor-pointer",
+                                colorClass
+                              )}
+                              onClick={() => {
+                                setSelectedMeeting(meeting);
+                                setMeetingDetailOpen(true);
+                              }}
+                            >
+                              <Video className="h-3 w-3 flex-shrink-0" />
+                              <span className="text-[10px] opacity-80">
+                                {format(new Date(meeting.meeting_date), 'HH:mm')}
+                              </span>
+                              <span className="truncate">{meeting.title}</span>
+                              {canViewAllCalendars && (
+                                <span className="text-[9px] opacity-70 ml-auto flex-shrink-0">
+                                  {getSdrName(meeting.sdr_id)}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        } else {
+                          const task = event.data;
+                          return (
+                            <div
+                              key={`t-${task.id}`}
+                              className={cn(
+                                "calendar-event flex items-center gap-1",
+                                task.completed 
+                                  ? "bg-muted text-muted-foreground line-through" 
+                                  : "bg-primary text-primary-foreground"
+                              )}
+                              onClick={() => toggleTaskComplete(task.id, task.completed)}
+                            >
+                              {task.completed && <Check className="h-3 w-3" />}
+                              {!task.all_day && (
+                                <span className="text-[10px] opacity-80">
+                                  {format(new Date(task.start_time), 'HH:mm')}
+                                </span>
+                              )}
+                              <span className="truncate">{task.title}</span>
+                            </div>
+                          );
+                        }
+                      })}
+                      {viewMode !== 'day' && dayEvents.length > 3 && (
                         <div className="text-xs text-muted-foreground text-center">
-                          +{dayTasks.length - 3} mais
+                          +{dayEvents.length - 3} mais
                         </div>
                       )}
                     </div>
@@ -429,6 +528,55 @@ export default function Calendario() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Meeting Detail Dialog */}
+      <Dialog open={meetingDetailOpen} onOpenChange={setMeetingDetailOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Video className="h-5 w-5 text-primary" />
+              {selectedMeeting?.title}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedMeeting && format(new Date(selectedMeeting.meeting_date), "dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
+              {selectedMeeting && ` • ${selectedMeeting.duration_minutes} min`}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedMeeting && (
+            <div className="space-y-4 pt-2">
+              {selectedMeeting.contact_name && (
+                <div>
+                  <Label className="text-muted-foreground">Contato</Label>
+                  <p className="font-medium">{selectedMeeting.contact_name}</p>
+                </div>
+              )}
+              {selectedMeeting.description && (
+                <div>
+                  <Label className="text-muted-foreground">Observações</Label>
+                  <p className="text-sm">{selectedMeeting.description}</p>
+                </div>
+              )}
+              {canViewAllCalendars && (
+                <div>
+                  <Label className="text-muted-foreground">SDR Responsável</Label>
+                  <p className="font-medium">{getSdrName(selectedMeeting.sdr_id) || 'N/A'}</p>
+                </div>
+              )}
+              <Button
+                className="w-full"
+                size="lg"
+                onClick={() => window.open(`${selectedMeeting.jitsi_link}#config.startWithVideoMuted=false&config.prejoinPageEnabled=false`, '_blank')}
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Entrar na Sala
+              </Button>
+              <p className="text-xs text-muted-foreground text-center">
+                A gravação automática está habilitada pelo Jitsi Meet
+              </p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

@@ -7,14 +7,15 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Loader2, Target, Search, Plus, MessageSquare, Phone, Mail, Building2, MapPin } from 'lucide-react';
+import { Loader2, Target, Search, Plus, MessageSquare, Phone, Mail, Building2, MapPin, Video } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { ScheduleMeetingModal } from '@/components/ScheduleMeetingModal';
+import { cn } from '@/lib/utils';
 
 type LeadStatus = 'novo' | 'contato' | 'qualificado' | 'proposta' | 'negociacao' | 'ganho' | 'perdido';
 
@@ -50,6 +51,7 @@ export default function Leads() {
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [newNote, setNewNote] = useState('');
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [meetingModalOpen, setMeetingModalOpen] = useState(false);
 
   const fetchLeads = async () => {
     setLoading(true);
@@ -259,12 +261,8 @@ export default function Leads() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        {lead.telefone && (
-                          <Phone className="h-4 w-4 text-muted-foreground" />
-                        )}
-                        {lead.email && (
-                          <Mail className="h-4 w-4 text-muted-foreground" />
-                        )}
+                        {lead.telefone && <Phone className="h-4 w-4 text-muted-foreground" />}
+                        {lead.email && <Mail className="h-4 w-4 text-muted-foreground" />}
                         {!lead.telefone && !lead.email && '-'}
                       </div>
                     </TableCell>
@@ -289,14 +287,16 @@ export default function Leads() {
                       </Select>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => openLeadDetails(lead)}
-                      >
-                        <MessageSquare className="h-4 w-4 mr-1" />
-                        Detalhes
-                      </Button>
+                      <div className="flex items-center justify-end gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => openLeadDetails(lead)}
+                        >
+                          <MessageSquare className="h-4 w-4 mr-1" />
+                          Detalhes
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -323,6 +323,20 @@ export default function Leads() {
             
             {selectedLead && (
               <div className="space-y-6 pt-4">
+                {/* Schedule Meeting Button */}
+                {(isAdmin || isSDR) && (
+                  <Button
+                    className="w-full"
+                    size="lg"
+                    onClick={() => {
+                      setMeetingModalOpen(true);
+                    }}
+                  >
+                    <Video className="h-5 w-5 mr-2" />
+                    Agendar Reunião
+                  </Button>
+                )}
+
                 {/* Info Cards */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
@@ -393,7 +407,10 @@ export default function Leads() {
                         </p>
                       ) : (
                         timeline.map((entry) => (
-                          <div key={entry.id} className="p-3 rounded-lg border bg-card">
+                          <div key={entry.id} className={cn(
+                            "p-3 rounded-lg border bg-card",
+                            entry.contact_type === 'meeting' && "border-primary/30 bg-primary/5"
+                          )}>
                             <p className="text-sm">{entry.content}</p>
                             <p className="text-xs text-muted-foreground mt-2">
                               {format(new Date(entry.created_at), "dd 'de' MMM 'às' HH:mm", { locale: ptBR })}
@@ -408,6 +425,16 @@ export default function Leads() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* Schedule Meeting Modal */}
+        <ScheduleMeetingModal
+          open={meetingModalOpen}
+          onOpenChange={setMeetingModalOpen}
+          lead={selectedLead}
+          onMeetingCreated={() => {
+            if (selectedLead) fetchTimeline(selectedLead.id);
+          }}
+        />
       </div>
     </DashboardLayout>
   );

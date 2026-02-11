@@ -3,8 +3,11 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Target, Users, Calendar, TrendingUp, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Target, Users, Calendar, TrendingUp, CheckCircle, Clock, XCircle, Video, ExternalLink } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { format, differenceInMinutes } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface Stats {
   totalLeads: number;
@@ -13,6 +16,15 @@ interface Stats {
   leadsEmAndamento: number;
   tasksPendentes: number;
   tasksCompletadas: number;
+}
+
+interface UpcomingMeeting {
+  id: string;
+  title: string;
+  meeting_date: string;
+  jitsi_link: string;
+  contact_name: string | null;
+  lead_name?: string;
 }
 
 const COLORS = ['hsl(217, 71%, 23%)', 'hsl(166, 64%, 42%)', 'hsl(142, 71%, 45%)', 'hsl(38, 92%, 50%)', 'hsl(0, 84%, 60%)'];
@@ -28,10 +40,10 @@ export default function Dashboard() {
     tasksCompletadas: 0,
   });
   const [leadsByStatus, setLeadsByStatus] = useState<{ name: string; value: number }[]>([]);
+  const [upcomingMeetings, setUpcomingMeetings] = useState<UpcomingMeeting[]>([]);
 
   useEffect(() => {
     const fetchStats = async () => {
-      // Fetch leads stats
       const { data: leads } = await supabase.from('leads').select('status');
       
       if (leads) {
@@ -47,7 +59,6 @@ export default function Dashboard() {
           leadsEmAndamento: emAndamento,
         }));
 
-        // Group by status for chart
         const statusCount: Record<string, number> = {};
         leads.forEach(lead => {
           const status = lead.status || 'novo';
@@ -72,7 +83,6 @@ export default function Dashboard() {
         );
       }
 
-      // Fetch tasks stats
       const { data: tasks } = await supabase.from('tasks').select('completed');
       
       if (tasks) {
@@ -84,14 +94,56 @@ export default function Dashboard() {
       }
     };
 
+    const fetchUpcomingMeetings = async () => {
+      if (!profile) return;
+      
+      const now = new Date().toISOString();
+      let query = supabase
+        .from('meetings')
+        .select('id, title, meeting_date, jitsi_link, contact_name, lead_id')
+        .gte('meeting_date', now)
+        .order('meeting_date', { ascending: true })
+        .limit(5);
+
+      if (!isAdmin && !isGerente) {
+        query = query.eq('sdr_id', profile.id);
+      }
+
+      const { data } = await query;
+      
+      if (data && data.length > 0) {
+        // Fetch lead names
+        const leadIds = [...new Set(data.map(m => m.lead_id))];
+        const { data: leads } = await supabase
+          .from('leads')
+          .select('id, razao_social, nome_fantasia')
+          .in('id', leadIds);
+        
+        const leadMap = new Map(leads?.map(l => [l.id, l.nome_fantasia || l.razao_social]) || []);
+        
+        setUpcomingMeetings(data.map(m => ({
+          ...m,
+          lead_name: leadMap.get(m.lead_id) || 'Empresa',
+        })));
+      }
+    };
+
     fetchStats();
-  }, []);
+    fetchUpcomingMeetings();
+  }, [profile]);
 
   const conversionData = [
     { name: 'Ganhos', value: stats.leadsGanhos, fill: 'hsl(142, 71%, 45%)' },
     { name: 'Perdidos', value: stats.leadsPerdidos, fill: 'hsl(0, 84%, 60%)' },
     { name: 'Em Andamento', value: stats.leadsEmAndamento, fill: 'hsl(38, 92%, 50%)' },
   ];
+
+  const getMeetingUrgency = (meetingDate: string) => {
+    const diff = differenceInMinutes(new Date(meetingDate), new Date());
+    if (diff <= 15 && diff >= 0) return 'urgent';
+    if (diff <= 60 && diff >= 0) return 'soon';
+    return 'normal';
+  };
 
   return (
     <DashboardLayout>
@@ -105,6 +157,61 @@ export default function Dashboard() {
             Aqui está o resumo das suas atividades
           </p>
         </div>
+
+        {/* Upcoming Meetings Alert */}
+        {upcomingMeetings.length > 0 && (
+          <Card className="border-primary/30 bg-primary/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Video className="h-5 w-5 text-primary" />
+                Próximas Reuniões
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {upcomingMeetings.map((meeting) => {
+                  const urgency = getMeetingUrgency(meeting.meeting_date);
+                  return (
+                    <div
+                      key={meeting.id}
+                      className={`flex items-center justify-between p-3 rounded-lg border ${
+                        urgency === 'urgent'
+                          ? 'bg-destructive/10 border-destructive/30 animate-pulse'
+                          : urgency === 'soon'
+                          ? 'bg-amber-500/10 border-amber-500/30'
+                          : 'bg-card'
+                      }`}
+                    >
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">{meeting.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {meeting.lead_name}
+                          {meeting.contact_name && ` • ${meeting.contact_name}`}
+                        </p>
+                        <p className={`text-xs mt-1 font-medium ${
+                          urgency === 'urgent' ? 'text-destructive' : 
+                          urgency === 'soon' ? 'text-amber-600' : 'text-muted-foreground'
+                        }`}>
+                          {urgency === 'urgent' 
+                            ? `⚠️ Em ${differenceInMinutes(new Date(meeting.meeting_date), new Date())} minutos!`
+                            : format(new Date(meeting.meeting_date), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant={urgency === 'urgent' ? 'default' : 'outline'}
+                        onClick={() => window.open(`${meeting.jitsi_link}#config.startWithVideoMuted=false`, '_blank')}
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        Entrar
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Stats Grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
