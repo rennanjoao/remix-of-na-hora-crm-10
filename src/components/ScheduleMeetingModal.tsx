@@ -33,6 +33,7 @@ interface ScheduleMeetingModalProps {
   onOpenChange: (open: boolean) => void;
   lead: Lead | null;
   onMeetingCreated?: () => void;
+  leads?: Lead[];
 }
 
 function sanitizeForUrl(text: string): string {
@@ -45,7 +46,9 @@ function sanitizeForUrl(text: string): string {
     .substring(0, 30);
 }
 
-export function ScheduleMeetingModal({ open, onOpenChange, lead, onMeetingCreated }: ScheduleMeetingModalProps) {
+export function ScheduleMeetingModal({ open, onOpenChange, lead, onMeetingCreated, leads = [] }: ScheduleMeetingModalProps) {
+  const [selectedLeadId, setSelectedLeadId] = useState<string>('');
+  const activeLead = lead || leads.find(l => l.id === selectedLeadId) || null;
   const { profile, isAdmin } = useAuth();
   const [sdrs, setSdrs] = useState<SDRProfile[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
@@ -61,14 +64,15 @@ export function ScheduleMeetingModal({ open, onOpenChange, lead, onMeetingCreate
 
   // Pre-fill when lead changes
   useEffect(() => {
-    if (lead) {
+    const l = activeLead;
+    if (l) {
       setForm(prev => ({
         ...prev,
-        title: `Reunião com ${lead.nome_fantasia || lead.razao_social}`,
+        title: `Reunião com ${l.nome_fantasia || l.razao_social}`,
         contact_name: '',
       }));
     }
-  }, [lead]);
+  }, [lead, selectedLeadId]);
 
   // Set default SDR
   useEffect(() => {
@@ -98,7 +102,7 @@ export function ScheduleMeetingModal({ open, onOpenChange, lead, onMeetingCreate
   }, [isAdmin]);
 
   const handleSave = async () => {
-    if (!lead || !profile || !selectedDate || !form.start_time) return;
+    if (!activeLead || !profile || !selectedDate || !form.start_time) return;
 
     const sdrId = form.sdr_id || profile.id;
 
@@ -106,11 +110,11 @@ export function ScheduleMeetingModal({ open, onOpenChange, lead, onMeetingCreate
     try {
       const meetingDate = new Date(`${format(selectedDate, 'yyyy-MM-dd')}T${form.start_time}`);
       const dateStr = format(selectedDate, 'ddMMyyyy');
-      const companySlug = sanitizeForUrl(lead.nome_fantasia || lead.razao_social);
+      const companySlug = sanitizeForUrl(activeLead.nome_fantasia || activeLead.razao_social);
       const jitsiLink = `https://meet.jit.si/NaHora-${companySlug}-${dateStr}`;
 
       const { error } = await supabase.from('meetings').insert({
-        lead_id: lead.id,
+        lead_id: activeLead.id,
         sdr_id: sdrId,
         created_by: profile.id,
         title: form.title,
@@ -125,7 +129,7 @@ export function ScheduleMeetingModal({ open, onOpenChange, lead, onMeetingCreate
 
       // Also add timeline entry
       await supabase.from('lead_timeline').insert({
-        lead_id: lead.id,
+        lead_id: activeLead.id,
         author_id: profile.id,
         content: `📅 Reunião agendada: ${form.title} — ${format(meetingDate, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`,
         contact_type: 'meeting',
@@ -153,11 +157,28 @@ export function ScheduleMeetingModal({ open, onOpenChange, lead, onMeetingCreate
             Agendar Reunião
           </DialogTitle>
           <DialogDescription>
-            {lead ? `Empresa: ${lead.nome_fantasia || lead.razao_social}` : 'Selecione um lead'}
+            {activeLead ? `Empresa: ${activeLead.nome_fantasia || activeLead.razao_social}` : 'Selecione uma empresa'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
+          {!lead && leads.length > 0 && (
+            <div className="space-y-2">
+              <Label>Empresa</Label>
+              <Select value={selectedLeadId} onValueChange={setSelectedLeadId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                  {leads.map(l => (
+                    <SelectItem key={l.id} value={l.id}>
+                      {l.nome_fantasia || l.razao_social}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-2">
             <Label>Título da Reunião</Label>
             <Input
@@ -260,7 +281,7 @@ export function ScheduleMeetingModal({ open, onOpenChange, lead, onMeetingCreate
             <p>O link será gerado automaticamente ao salvar.</p>
           </div>
 
-          <Button onClick={handleSave} className="w-full" disabled={saving || !form.title || !selectedDate}>
+          <Button onClick={handleSave} className="w-full" disabled={saving || !form.title || !selectedDate || !activeLead}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Video className="h-4 w-4 mr-2" />}
             Agendar Reunião
           </Button>
