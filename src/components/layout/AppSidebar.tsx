@@ -7,7 +7,9 @@ import {
   LogOut,
   Truck,
   Target,
-  ChevronRight
+  ChevronRight,
+  Video,
+  Mail
 } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -39,6 +41,8 @@ const navItems: NavItem[] = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'sdr', 'gerente', 'motorista'] },
   { title: 'Leads', url: '/leads', icon: Target, roles: ['admin', 'sdr', 'gerente'] },
   { title: 'Prospecção', url: '/prospeccao', icon: Search, roles: ['admin', 'sdr'] },
+  { title: 'Reuniões', url: '/reunioes', icon: Video, roles: ['admin', 'sdr', 'gerente'] },
+  { title: 'Automação', url: '/automacao', icon: Mail, roles: ['admin', 'sdr'] },
   { title: 'Calendário', url: '/calendario', icon: Calendar, roles: ['admin', 'sdr', 'gerente'] },
   { title: 'Administração', url: '/admin', icon: UserCog, roles: ['admin'] },
 ];

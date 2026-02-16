@@ -11,6 +11,8 @@ import Admin from "./pages/Admin";
 import Leads from "./pages/Leads";
 import Prospeccao from "./pages/Prospeccao";
 import Calendario from "./pages/Calendario";
+import Reunioes from "./pages/Reunioes";
+import Automacao from "./pages/Automacao";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +31,8 @@ const App = () => (
             <Route path="/admin" element={<Admin />} />
             <Route path="/leads" element={<Leads />} />
             <Route path="/prospeccao" element={<Prospeccao />} />
+            <Route path="/reunioes" element={<Reunioes />} />
+            <Route path="/automacao" element={<Automacao />} />
             <Route path="/calendario" element={<Calendario />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
