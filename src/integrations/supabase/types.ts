@@ -14,6 +14,166 @@ export type Database = {
   }
   public: {
     Tables: {
+      email_campaigns: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      email_sends: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          id: string
+          last_opened_at: string | null
+          lead_id: string
+          open_count: number
+          replied: boolean
+          replied_at: string | null
+          scheduled_for: string | null
+          sdr_id: string
+          sent_at: string | null
+          status: string
+          step_id: string
+          tracking_id: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          id?: string
+          last_opened_at?: string | null
+          lead_id: string
+          open_count?: number
+          replied?: boolean
+          replied_at?: string | null
+          scheduled_for?: string | null
+          sdr_id: string
+          sent_at?: string | null
+          status?: string
+          step_id: string
+          tracking_id?: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          id?: string
+          last_opened_at?: string | null
+          lead_id?: string
+          open_count?: number
+          replied?: boolean
+          replied_at?: string | null
+          scheduled_for?: string | null
+          sdr_id?: string
+          sent_at?: string | null
+          status?: string
+          step_id?: string
+          tracking_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_sends_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_sends_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_sends_step_id_fkey"
+            columns: ["step_id"]
+            isOneToOne: false
+            referencedRelation: "email_steps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_steps: {
+        Row: {
+          body_html: string
+          campaign_id: string
+          condition_ref_step_id: string | null
+          condition_type: string | null
+          created_at: string
+          delay_days: number
+          id: string
+          step_order: number
+          step_type: string
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          body_html: string
+          campaign_id: string
+          condition_ref_step_id?: string | null
+          condition_type?: string | null
+          created_at?: string
+          delay_days?: number
+          id?: string
+          step_order?: number
+          step_type?: string
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          body_html?: string
+          campaign_id?: string
+          condition_ref_step_id?: string | null
+          condition_type?: string | null
+          created_at?: string
+          delay_days?: number
+          id?: string
+          step_order?: number
+          step_type?: string
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_steps_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_steps_condition_ref_step_id_fkey"
+            columns: ["condition_ref_step_id"]
+            isOneToOne: false
+            referencedRelation: "email_steps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_timeline: {
         Row: {
           author_id: string | null
@@ -139,7 +299,9 @@ export type Database = {
           jitsi_link: string
           lead_id: string
           meeting_date: string
+          meeting_type: string
           sdr_id: string
+          status: string
           title: string
           updated_at: string
         }
@@ -153,7 +315,9 @@ export type Database = {
           jitsi_link: string
           lead_id: string
           meeting_date: string
+          meeting_type?: string
           sdr_id: string
+          status?: string
           title: string
           updated_at?: string
         }
@@ -167,7 +331,9 @@ export type Database = {
           jitsi_link?: string
           lead_id?: string
           meeting_date?: string
+          meeting_type?: string
           sdr_id?: string
+          status?: string
           title?: string
           updated_at?: string
         }
