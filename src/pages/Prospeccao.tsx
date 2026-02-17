@@ -1,154 +1,178 @@
-import { useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useRoleGuard } from '@/hooks/useRoleGuard';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Loader2, Search, Building2, Download, ExternalLink, Phone, Mail, MapPin } from 'lucide-react';
+import { Loader2, Building2 } from 'lucide-react';
 
-// Mock data for Brazilian companies (simulating API Minha Receita)
-const MOCK_COMPANIES = [
-  { cnpj: '12.345.678/0001-90', razao_social: 'Logística Express LTDA', nome_fantasia: 'Log Express', telefone: '(11) 98765-4321', email: 'contato@logexpress.com.br', cidade: 'São Paulo', estado: 'SP', cnae_codigo: '4930-2/01', cnae_descricao: 'Transporte rodoviário de carga' },
-  { cnpj: '98.765.432/0001-10', razao_social: 'Transportadora Brasil S.A.', nome_fantasia: 'Trans Brasil', telefone: '(21) 99876-5432', email: 'comercial@transbrasil.com.br', cidade: 'Rio de Janeiro', estado: 'RJ', cnae_codigo: '4930-2/02', cnae_descricao: 'Transporte rodoviário de carga' },
-  { cnpj: '11.222.333/0001-44', razao_social: 'Indústria Metalúrgica São Paulo LTDA', nome_fantasia: 'Metal SP', telefone: '(11) 3333-4444', email: 'vendas@metalsp.com.br', cidade: 'Guarulhos', estado: 'SP', cnae_codigo: '2599-3/99', cnae_descricao: 'Fabricação de produtos de metal' },
-  { cnpj: '55.666.777/0001-88', razao_social: 'Distribuidora Nacional EIRELI', nome_fantasia: 'Distri Nacional', telefone: '(31) 99888-7766', email: 'pedidos@distrinacional.com.br', cidade: 'Belo Horizonte', estado: 'MG', cnae_codigo: '4639-7/01', cnae_descricao: 'Comércio atacadista de produtos alimentícios' },
-  { cnpj: '33.444.555/0001-22', razao_social: 'Agronegócio Sul LTDA', nome_fantasia: 'Agro Sul', telefone: '(51) 98765-1234', email: 'contato@agrosul.com.br', cidade: 'Porto Alegre', estado: 'RS', cnae_codigo: '0111-3/01', cnae_descricao: 'Cultivo de arroz' },
-  { cnpj: '77.888.999/0001-66', razao_social: 'Tecnologia Nordeste S.A.', nome_fantasia: 'TechNE', telefone: '(81) 99999-8888', email: 'info@techne.com.br', cidade: 'Recife', estado: 'PE', cnae_codigo: '6201-5/01', cnae_descricao: 'Desenvolvimento de programas de computador' },
-  { cnpj: '22.333.444/0001-55', razao_social: 'Construtora Centro-Oeste LTDA', nome_fantasia: 'Constrói CO', telefone: '(62) 98877-6655', email: 'obras@constroico.com.br', cidade: 'Goiânia', estado: 'GO', cnae_codigo: '4120-4/00', cnae_descricao: 'Construção de edifícios' },
-  { cnpj: '44.555.666/0001-33', razao_social: 'Farmácia Popular do Brasil LTDA', nome_fantasia: 'FarmaPop', telefone: '(85) 97766-5544', email: 'central@farmapop.com.br', cidade: 'Fortaleza', estado: 'CE', cnae_codigo: '4771-7/01', cnae_descricao: 'Comércio varejista de produtos farmacêuticos' },
-];
+import { useBrasilAPI, BrasilAPICompany } from '@/hooks/useBrasilAPI';
+import { CNPJSearchCard } from '@/components/prospeccao/CNPJSearchCard';
+import { CompanyPreviewCard } from '@/components/prospeccao/CompanyPreviewCard';
+import { ConsultaHistoryTable } from '@/components/prospeccao/ConsultaHistoryTable';
+import { ProspeccaoDashboard } from '@/components/prospeccao/ProspeccaoDashboard';
 
-const SETORES = [
-  { value: 'all', label: 'Todos os setores' },
-  { value: 'logistica', label: 'Logística e Transporte' },
-  { value: 'industria', label: 'Indústria' },
-  { value: 'comercio', label: 'Comércio' },
-  { value: 'agro', label: 'Agronegócio' },
-  { value: 'tecnologia', label: 'Tecnologia' },
-  { value: 'construcao', label: 'Construção' },
-  { value: 'saude', label: 'Saúde' },
-];
-
-const ESTADOS = [
-  { value: 'all', label: 'Todos os estados' },
-  { value: 'SP', label: 'São Paulo' },
-  { value: 'RJ', label: 'Rio de Janeiro' },
-  { value: 'MG', label: 'Minas Gerais' },
-  { value: 'RS', label: 'Rio Grande do Sul' },
-  { value: 'PR', label: 'Paraná' },
-  { value: 'SC', label: 'Santa Catarina' },
-  { value: 'BA', label: 'Bahia' },
-  { value: 'PE', label: 'Pernambuco' },
-  { value: 'CE', label: 'Ceará' },
-  { value: 'GO', label: 'Goiás' },
-];
-
-interface Company {
+interface Consulta {
+  id: string;
   cnpj: string;
-  razao_social: string;
-  nome_fantasia: string;
-  telefone: string;
-  email: string;
-  cidade: string;
-  estado: string;
-  cnae_codigo: string;
-  cnae_descricao: string;
+  razao_social: string | null;
+  cnae_codigo: string | null;
+  cidade: string | null;
+  estado: string | null;
+  importado: boolean | null;
+  created_at: string;
 }
 
 export default function Prospeccao() {
   const { isAllowed, loading: guardLoading } = useRoleGuard(['admin', 'sdr'], '/dashboard');
   const { profile } = useAuth();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [setor, setSetor] = useState('all');
-  const [estado, setEstado] = useState('all');
-  const [cidade, setCidade] = useState('');
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [importing, setImporting] = useState<string | null>(null);
+  const { searchCNPJ, company, loading, reset } = useBrasilAPI();
 
-  const searchCompanies = () => {
-    setLoading(true);
-    
-    // Simulate API delay
-    setTimeout(() => {
-      let filtered = [...MOCK_COMPANIES];
+  const [importing, setImporting] = useState(false);
+  const [alreadyImported, setAlreadyImported] = useState(false);
+  const [consultas, setConsultas] = useState<Consulta[]>([]);
+  const [consultadasHoje, setConsultadasHoje] = useState(0);
+  const [importadasHoje, setImportadasHoje] = useState(0);
 
-      if (searchTerm) {
-        filtered = filtered.filter(c => 
-          c.razao_social.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          c.nome_fantasia.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          c.cnpj.includes(searchTerm)
-        );
-      }
+  const loadConsultas = useCallback(async () => {
+    if (!profile) return;
+    const { data } = await supabase
+      .from('cnpj_consultas')
+      .select('id, cnpj, razao_social, cnae_codigo, cidade, estado, importado, created_at')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (data) setConsultas(data);
 
-      if (estado !== 'all') {
-        filtered = filtered.filter(c => c.estado === estado);
-      }
+    // Today's stats
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const { count: countHoje } = await supabase
+      .from('cnpj_consultas')
+      .select('id', { count: 'exact', head: true })
+      .gte('created_at', today.toISOString());
+    const { count: countImportadas } = await supabase
+      .from('cnpj_consultas')
+      .select('id', { count: 'exact', head: true })
+      .eq('importado', true)
+      .gte('created_at', today.toISOString());
+    setConsultadasHoje(countHoje || 0);
+    setImportadasHoje(countImportadas || 0);
+  }, [profile]);
 
-      if (cidade) {
-        filtered = filtered.filter(c => 
-          c.cidade.toLowerCase().includes(cidade.toLowerCase())
-        );
-      }
+  useEffect(() => {
+    if (profile) loadConsultas();
+  }, [profile, loadConsultas]);
 
-      setCompanies(filtered);
-      setLoading(false);
-      toast.success(`${filtered.length} empresas encontradas`);
-    }, 800);
+  const handleSearch = async (cnpj: string) => {
+    if (!profile) return;
+
+    // Check duplicate in history
+    const existing = consultas.find(c => c.cnpj === cnpj);
+    if (existing && existing.importado) {
+      setAlreadyImported(true);
+    } else {
+      setAlreadyImported(false);
+    }
+
+    const result = await searchCNPJ(cnpj);
+    if (!result) return;
+
+    // Save consultation to history
+    await supabase.from('cnpj_consultas').insert([{
+      cnpj,
+      razao_social: result.razao_social,
+      nome_fantasia: result.nome_fantasia,
+      cnae_codigo: String(result.cnae_fiscal),
+      cnae_descricao: result.cnae_fiscal_descricao,
+      logradouro: `${result.logradouro}${result.numero ? ', ' + result.numero : ''}`,
+      cidade: result.municipio,
+      estado: result.uf,
+      telefone: result.ddd_telefone_1 || result.ddd_telefone_2,
+      email: result.email,
+      dados_completos: JSON.parse(JSON.stringify(result)),
+      consultado_por: profile.id,
+    }]);
+
+    // Check if already a lead
+    const { data: existingLead } = await supabase
+      .from('leads')
+      .select('id')
+      .eq('cnpj', cnpj)
+      .maybeSingle();
+    if (existingLead) setAlreadyImported(true);
+
+    loadConsultas();
   };
 
-  const importToLeads = async (company: Company) => {
-    if (!profile) return;
-    
-    setImporting(company.cnpj);
+  const handleImport = async () => {
+    if (!profile || !company) return;
+    setImporting(true);
+
     try {
-      // Check if lead already exists
-      const { data: existing } = await supabase
+      const cnpjClean = company.cnpj.replace(/\D/g, '');
+
+      const { data: existingLead } = await supabase
         .from('leads')
         .select('id')
-        .eq('cnpj', company.cnpj)
+        .eq('cnpj', cnpjClean)
         .maybeSingle();
 
-      if (existing) {
+      if (existingLead) {
         toast.error('Esta empresa já está cadastrada como lead');
-        setImporting(null);
+        setAlreadyImported(true);
         return;
       }
 
-      // Import to leads
-      const { error } = await supabase.from('leads').insert({
-        cnpj: company.cnpj,
+      const { data: newLead, error } = await supabase.from('leads').insert({
+        cnpj: cnpjClean,
         razao_social: company.razao_social,
         nome_fantasia: company.nome_fantasia,
-        telefone: company.telefone,
+        telefone: company.ddd_telefone_1 || company.ddd_telefone_2,
         email: company.email,
-        cidade: company.cidade,
-        estado: company.estado,
-        cnae_codigo: company.cnae_codigo,
-        cnae_descricao: company.cnae_descricao,
-        setor: company.cnae_descricao,
+        cidade: company.municipio,
+        estado: company.uf,
+        cnae_codigo: String(company.cnae_fiscal),
+        cnae_descricao: company.cnae_fiscal_descricao,
+        setor: company.cnae_fiscal_descricao,
         created_by: profile.id,
         assigned_to: profile.id,
         status: 'novo',
-      });
+        fonte: 'Brasil API',
+      }).select('id').single();
 
       if (error) throw error;
 
+      // Mark consulta as imported
+      await supabase
+        .from('cnpj_consultas')
+        .update({ importado: true, lead_id: newLead.id })
+        .eq('cnpj', cnpjClean)
+        .eq('consultado_por', profile.id);
+
       toast.success('Empresa importada para o CRM!');
-      
-      // Remove from list
-      setCompanies(prev => prev.filter(c => c.cnpj !== company.cnpj));
-    } catch (error) {
-      console.error('Error importing lead:', error);
+      setAlreadyImported(true);
+      loadConsultas();
+    } catch (err) {
+      console.error('Error importing lead:', err);
       toast.error('Erro ao importar empresa');
     } finally {
-      setImporting(null);
+      setImporting(false);
     }
+  };
+
+  const handleStartEmailFlow = () => {
+    toast.info('Redirecionando para Automação para configurar o fluxo de boas-vindas...');
+    // Could navigate to /automacao with pre-selected lead
+  };
+
+  const handleSendWhatsApp = () => {
+    if (!company) return;
+    const phone = (company.ddd_telefone_1 || company.ddd_telefone_2).replace(/\D/g, '');
+    const msg = encodeURIComponent(`Olá! Somos especializados em soluções de transporte e logística. Gostaríamos de apresentar nossos serviços para a ${company.nome_fantasia || company.razao_social}.`);
+    window.open(`https://wa.me/55${phone}?text=${msg}`, '_blank');
+    toast.success('WhatsApp aberto em nova aba');
   };
 
   if (guardLoading) {
@@ -161,9 +185,7 @@ export default function Prospeccao() {
     );
   }
 
-  if (!isAllowed) {
-    return null;
-  }
+  if (!isAllowed) return null;
 
   return (
     <DashboardLayout>
@@ -171,171 +193,39 @@ export default function Prospeccao() {
         <div>
           <h1 className="font-display text-3xl font-bold">Prospecção B2B</h1>
           <p className="text-muted-foreground mt-1">
-            Busque empresas brasileiras e importe para seu CRM
+            Consulte dados oficiais da Receita Federal e importe leads qualificados
           </p>
         </div>
 
-        {/* Search Filters */}
+        <ProspeccaoDashboard
+          consultadasHoje={consultadasHoje}
+          importadasHoje={importadasHoje}
+        />
+
+        <CNPJSearchCard onSearch={handleSearch} loading={loading} />
+
+        {company && (
+          <CompanyPreviewCard
+            company={company}
+            onImport={handleImport}
+            importing={importing}
+            alreadyImported={alreadyImported}
+            onStartEmailFlow={alreadyImported ? handleStartEmailFlow : undefined}
+            onSendWhatsApp={alreadyImported ? handleSendWhatsApp : undefined}
+          />
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Search className="h-5 w-5" />
-              Filtros de Busca
+              <Building2 className="h-5 w-5" />
+              Histórico de Consultas
             </CardTitle>
-            <CardDescription>
-              Pesquise empresas por CNAE, setor, cidade ou estado
-            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              <div className="lg:col-span-2">
-                <Input
-                  placeholder="Buscar por nome ou CNPJ..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              <Select value={setor} onValueChange={setSetor}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Setor" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SETORES.map(s => (
-                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={estado} onValueChange={setEstado}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ESTADOS.map(e => (
-                    <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                placeholder="Cidade"
-                value={cidade}
-                onChange={(e) => setCidade(e.target.value)}
-              />
-            </div>
-            <Button 
-              onClick={searchCompanies} 
-              className="mt-4"
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Buscando...
-                </>
-              ) : (
-                <>
-                  <Search className="h-4 w-4 mr-2" />
-                  Buscar Empresas
-                </>
-              )}
-            </Button>
+            <ConsultaHistoryTable consultas={consultas} />
           </CardContent>
         </Card>
-
-        {/* Results */}
-        {companies.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Building2 className="h-5 w-5" />
-                Resultados da Busca
-              </CardTitle>
-              <CardDescription>{companies.length} empresas encontradas</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Empresa</TableHead>
-                    <TableHead>CNPJ</TableHead>
-                    <TableHead>Atividade</TableHead>
-                    <TableHead>Localização</TableHead>
-                    <TableHead>Contato</TableHead>
-                    <TableHead className="text-right">Ação</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {companies.map((company) => (
-                    <TableRow key={company.cnpj}>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{company.razao_social}</p>
-                          <p className="text-sm text-muted-foreground">{company.nome_fantasia}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">{company.cnpj}</TableCell>
-                      <TableCell>
-                        <div className="max-w-[200px]">
-                          <p className="text-sm truncate" title={company.cnae_descricao}>
-                            {company.cnae_descricao}
-                          </p>
-                          <p className="text-xs text-muted-foreground">{company.cnae_codigo}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm">
-                          <MapPin className="h-3 w-3" />
-                          {company.cidade}/{company.estado}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-1 text-sm">
-                            <Phone className="h-3 w-3" />
-                            {company.telefone}
-                          </div>
-                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                            <Mail className="h-3 w-3" />
-                            {company.email}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          onClick={() => importToLeads(company)}
-                          disabled={importing === company.cnpj}
-                        >
-                          {importing === company.cnpj ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <>
-                              <Download className="h-4 w-4 mr-1" />
-                              Importar
-                            </>
-                          )}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Empty State */}
-        {companies.length === 0 && !loading && (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="font-medium text-lg mb-2">Pesquise Empresas</h3>
-              <p className="text-muted-foreground max-w-md mx-auto">
-                Use os filtros acima para buscar empresas brasileiras. 
-                Os dados são baseados em informações públicas do CNPJ.
-              </p>
-            </CardContent>
-          </Card>
-        )}
       </div>
     </DashboardLayout>
   );

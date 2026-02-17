@@ -14,6 +14,71 @@ export type Database = {
   }
   public: {
     Tables: {
+      cnpj_consultas: {
+        Row: {
+          cidade: string | null
+          cnae_codigo: string | null
+          cnae_descricao: string | null
+          cnpj: string
+          consultado_por: string
+          created_at: string
+          dados_completos: Json | null
+          email: string | null
+          estado: string | null
+          id: string
+          importado: boolean | null
+          lead_id: string | null
+          logradouro: string | null
+          nome_fantasia: string | null
+          razao_social: string | null
+          telefone: string | null
+        }
+        Insert: {
+          cidade?: string | null
+          cnae_codigo?: string | null
+          cnae_descricao?: string | null
+          cnpj: string
+          consultado_por: string
+          created_at?: string
+          dados_completos?: Json | null
+          email?: string | null
+          estado?: string | null
+          id?: string
+          importado?: boolean | null
+          lead_id?: string | null
+          logradouro?: string | null
+          nome_fantasia?: string | null
+          razao_social?: string | null
+          telefone?: string | null
+        }
+        Update: {
+          cidade?: string | null
+          cnae_codigo?: string | null
+          cnae_descricao?: string | null
+          cnpj?: string
+          consultado_por?: string
+          created_at?: string
+          dados_completos?: Json | null
+          email?: string | null
+          estado?: string | null
+          id?: string
+          importado?: boolean | null
+          lead_id?: string | null
+          logradouro?: string | null
+          nome_fantasia?: string | null
+          razao_social?: string | null
+          telefone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cnpj_consultas_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_campaigns: {
         Row: {
           created_at: string
@@ -227,6 +292,7 @@ export type Database = {
           created_by: string | null
           email: string | null
           estado: string | null
+          fonte: string | null
           id: string
           nome_fantasia: string | null
           razao_social: string
@@ -245,6 +311,7 @@ export type Database = {
           created_by?: string | null
           email?: string | null
           estado?: string | null
+          fonte?: string | null
           id?: string
           nome_fantasia?: string | null
           razao_social: string
@@ -263,6 +330,7 @@ export type Database = {
           created_by?: string | null
           email?: string | null
           estado?: string | null
+          fonte?: string | null
           id?: string
           nome_fantasia?: string | null
           razao_social?: string
