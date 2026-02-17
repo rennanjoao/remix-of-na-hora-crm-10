@@ -6,13 +6,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Loader2, Building2 } from 'lucide-react';
+import { Loader2, Building2, Search, Pickaxe } from 'lucide-react';
 
 import { useBrasilAPI, BrasilAPICompany } from '@/hooks/useBrasilAPI';
 import { CNPJSearchCard } from '@/components/prospeccao/CNPJSearchCard';
 import { CompanyPreviewCard } from '@/components/prospeccao/CompanyPreviewCard';
 import { ConsultaHistoryTable } from '@/components/prospeccao/ConsultaHistoryTable';
 import { ProspeccaoDashboard } from '@/components/prospeccao/ProspeccaoDashboard';
+import { MiningMode } from '@/components/prospeccao/MiningMode';
 
 interface Consulta {
   id: string;
@@ -202,30 +203,49 @@ export default function Prospeccao() {
           importadasHoje={importadasHoje}
         />
 
-        <CNPJSearchCard onSearch={handleSearch} loading={loading} />
+        <Tabs defaultValue="consulta" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="consulta" className="gap-2">
+              <Search className="h-4 w-4" />
+              Consulta Individual
+            </TabsTrigger>
+            <TabsTrigger value="mineracao" className="gap-2">
+              <Pickaxe className="h-4 w-4" />
+              Modo Mineração
+            </TabsTrigger>
+          </TabsList>
 
-        {company && (
-          <CompanyPreviewCard
-            company={company}
-            onImport={handleImport}
-            importing={importing}
-            alreadyImported={alreadyImported}
-            onStartEmailFlow={alreadyImported ? handleStartEmailFlow : undefined}
-            onSendWhatsApp={alreadyImported ? handleSendWhatsApp : undefined}
-          />
-        )}
+          <TabsContent value="consulta" className="space-y-4">
+            <CNPJSearchCard onSearch={handleSearch} loading={loading} />
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" />
-              Histórico de Consultas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ConsultaHistoryTable consultas={consultas} />
-          </CardContent>
-        </Card>
+            {company && (
+              <CompanyPreviewCard
+                company={company}
+                onImport={handleImport}
+                importing={importing}
+                alreadyImported={alreadyImported}
+                onStartEmailFlow={alreadyImported ? handleStartEmailFlow : undefined}
+                onSendWhatsApp={alreadyImported ? handleSendWhatsApp : undefined}
+              />
+            )}
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="h-5 w-5" />
+                  Histórico de Consultas
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ConsultaHistoryTable consultas={consultas} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="mineracao">
+            <MiningMode />
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );
