@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_usage_logs: {
+        Row: {
+          cost_estimated: number | null
+          created_at: string | null
+          id: string
+          service_name: string | null
+        }
+        Insert: {
+          cost_estimated?: number | null
+          created_at?: string | null
+          id?: string
+          service_name?: string | null
+        }
+        Update: {
+          cost_estimated?: number | null
+          created_at?: string | null
+          id?: string
+          service_name?: string | null
+        }
+        Relationships: []
+      }
       cnpj_consultas: {
         Row: {
           cidade: string | null
@@ -284,6 +305,7 @@ export type Database = {
       leads: {
         Row: {
           assigned_to: string | null
+          bairro: string | null
           cidade: string | null
           cnae_codigo: string | null
           cnae_descricao: string | null
@@ -293,16 +315,22 @@ export type Database = {
           email: string | null
           estado: string | null
           fonte: string | null
+          foto_url: string | null
           id: string
           nome_fantasia: string | null
+          place_id: string | null
+          rating: number | null
           razao_social: string
           setor: string | null
           status: Database["public"]["Enums"]["lead_status"] | null
           telefone: string | null
           updated_at: string
+          website: string | null
+          zona: string | null
         }
         Insert: {
           assigned_to?: string | null
+          bairro?: string | null
           cidade?: string | null
           cnae_codigo?: string | null
           cnae_descricao?: string | null
@@ -312,16 +340,22 @@ export type Database = {
           email?: string | null
           estado?: string | null
           fonte?: string | null
+          foto_url?: string | null
           id?: string
           nome_fantasia?: string | null
+          place_id?: string | null
+          rating?: number | null
           razao_social: string
           setor?: string | null
           status?: Database["public"]["Enums"]["lead_status"] | null
           telefone?: string | null
           updated_at?: string
+          website?: string | null
+          zona?: string | null
         }
         Update: {
           assigned_to?: string | null
+          bairro?: string | null
           cidade?: string | null
           cnae_codigo?: string | null
           cnae_descricao?: string | null
@@ -331,13 +365,18 @@ export type Database = {
           email?: string | null
           estado?: string | null
           fonte?: string | null
+          foto_url?: string | null
           id?: string
           nome_fantasia?: string | null
+          place_id?: string | null
+          rating?: number | null
           razao_social?: string
           setor?: string | null
           status?: Database["public"]["Enums"]["lead_status"] | null
           telefone?: string | null
           updated_at?: string
+          website?: string | null
+          zona?: string | null
         }
         Relationships: [
           {
