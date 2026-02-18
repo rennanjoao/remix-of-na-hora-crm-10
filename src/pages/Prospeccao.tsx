@@ -8,12 +8,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Loader2, Building2, Search, Pickaxe } from 'lucide-react';
 
-import { useBrasilAPI, BrasilAPICompany } from '@/hooks/useBrasilAPI';
+import { useBrasilAPI } from '@/hooks/useBrasilAPI';
 import { CNPJSearchCard } from '@/components/prospeccao/CNPJSearchCard';
-import { CompanyPreviewCard } from '@/components/prospeccao/CompanyPreviewCard';
+import { LeadDetailPanel } from '@/components/prospeccao/LeadDetailPanel';
 import { ConsultaHistoryTable } from '@/components/prospeccao/ConsultaHistoryTable';
-import { ProspeccaoDashboard } from '@/components/prospeccao/ProspeccaoDashboard';
 import { MiningMode } from '@/components/prospeccao/MiningMode';
+import { ProspeccaoStatusBar } from '@/components/prospeccao/ProspeccaoStatusBar';
 
 interface Consulta {
   id: string;
@@ -26,6 +26,11 @@ interface Consulta {
   created_at: string;
 }
 
+function normalizePhone(phone: string | null): string | null {
+  if (!phone) return null;
+  return phone.replace(/\D/g, '').slice(-11);
+}
+
 export default function Prospeccao() {
   const { isAllowed, loading: guardLoading } = useRoleGuard(['admin', 'sdr'], '/dashboard');
   const { profile } = useAuth();
@@ -36,6 +41,7 @@ export default function Prospeccao() {
   const [consultas, setConsultas] = useState<Consulta[]>([]);
   const [consultadasHoje, setConsultadasHoje] = useState(0);
   const [importadasHoje, setImportadasHoje] = useState(0);
+  const [emailsHoje, setEmailsHoje] = useState(0);
 
   const loadConsultas = useCallback(async () => {
     if (!profile) return;
@@ -46,20 +52,16 @@ export default function Prospeccao() {
       .limit(50);
     if (data) setConsultas(data);
 
-    // Today's stats
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const { count: countHoje } = await supabase
-      .from('cnpj_consultas')
-      .select('id', { count: 'exact', head: true })
-      .gte('created_at', today.toISOString());
-    const { count: countImportadas } = await supabase
-      .from('cnpj_consultas')
-      .select('id', { count: 'exact', head: true })
-      .eq('importado', true)
-      .gte('created_at', today.toISOString());
+    const [{ count: countHoje }, { count: countImportadas }, { count: countEmails }] = await Promise.all([
+      supabase.from('cnpj_consultas').select('id', { count: 'exact', head: true }).gte('created_at', today.toISOString()),
+      supabase.from('cnpj_consultas').select('id', { count: 'exact', head: true }).eq('importado', true).gte('created_at', today.toISOString()),
+      supabase.from('email_sends').select('id', { count: 'exact', head: true }).gte('created_at', today.toISOString()),
+    ]);
     setConsultadasHoje(countHoje || 0);
     setImportadasHoje(countImportadas || 0);
+    setEmailsHoje(countEmails || 0);
   }, [profile]);
 
   useEffect(() => {
@@ -68,19 +70,15 @@ export default function Prospeccao() {
 
   const handleSearch = async (cnpj: string) => {
     if (!profile) return;
+    reset();
+    setAlreadyImported(false);
 
-    // Check duplicate in history
     const existing = consultas.find(c => c.cnpj === cnpj);
-    if (existing && existing.importado) {
-      setAlreadyImported(true);
-    } else {
-      setAlreadyImported(false);
-    }
+    if (existing?.importado) setAlreadyImported(true);
 
     const result = await searchCNPJ(cnpj);
     if (!result) return;
 
-    // Save consultation to history
     await supabase.from('cnpj_consultas').insert([{
       cnpj,
       razao_social: result.razao_social,
@@ -90,18 +88,13 @@ export default function Prospeccao() {
       logradouro: `${result.logradouro}${result.numero ? ', ' + result.numero : ''}`,
       cidade: result.municipio,
       estado: result.uf,
-      telefone: result.ddd_telefone_1 || result.ddd_telefone_2,
+      telefone: normalizePhone(result.ddd_telefone_1 || result.ddd_telefone_2),
       email: result.email,
       dados_completos: JSON.parse(JSON.stringify(result)),
       consultado_por: profile.id,
     }]);
 
-    // Check if already a lead
-    const { data: existingLead } = await supabase
-      .from('leads')
-      .select('id')
-      .eq('cnpj', cnpj)
-      .maybeSingle();
+    const { data: existingLead } = await supabase.from('leads').select('id').eq('cnpj', cnpj).maybeSingle();
     if (existingLead) setAlreadyImported(true);
 
     loadConsultas();
@@ -110,27 +103,24 @@ export default function Prospeccao() {
   const handleImport = async () => {
     if (!profile || !company) return;
     setImporting(true);
-
     try {
       const cnpjClean = company.cnpj.replace(/\D/g, '');
+      // Dedup: CNPJ > phone > name+city
+      const phoneNorm = normalizePhone(company.ddd_telefone_1 || company.ddd_telefone_2);
 
-      const { data: existingLead } = await supabase
-        .from('leads')
-        .select('id')
-        .eq('cnpj', cnpjClean)
-        .maybeSingle();
+      const { data: byCNPJ } = await supabase.from('leads').select('id').eq('cnpj', cnpjClean).maybeSingle();
+      if (byCNPJ) { toast.error('Esta empresa já está cadastrada como lead'); setAlreadyImported(true); return; }
 
-      if (existingLead) {
-        toast.error('Esta empresa já está cadastrada como lead');
-        setAlreadyImported(true);
-        return;
+      if (phoneNorm) {
+        const { data: byPhone } = await supabase.from('leads').select('id').eq('telefone', phoneNorm).maybeSingle();
+        if (byPhone) { toast.error('Lead com este telefone já existe'); setAlreadyImported(true); return; }
       }
 
       const { data: newLead, error } = await supabase.from('leads').insert({
         cnpj: cnpjClean,
         razao_social: company.razao_social,
         nome_fantasia: company.nome_fantasia,
-        telefone: company.ddd_telefone_1 || company.ddd_telefone_2,
+        telefone: phoneNorm,
         email: company.email,
         cidade: company.municipio,
         estado: company.uf,
@@ -145,13 +135,7 @@ export default function Prospeccao() {
 
       if (error) throw error;
 
-      // Mark consulta as imported
-      await supabase
-        .from('cnpj_consultas')
-        .update({ importado: true, lead_id: newLead.id })
-        .eq('cnpj', cnpjClean)
-        .eq('consultado_por', profile.id);
-
+      await supabase.from('cnpj_consultas').update({ importado: true, lead_id: newLead.id }).eq('cnpj', cnpjClean).eq('consultado_por', profile.id);
       toast.success('Empresa importada para o CRM!');
       setAlreadyImported(true);
       loadConsultas();
@@ -163,14 +147,12 @@ export default function Prospeccao() {
     }
   };
 
-  const handleStartEmailFlow = () => {
-    toast.info('Redirecionando para Automação para configurar o fluxo de boas-vindas...');
-    // Could navigate to /automacao with pre-selected lead
-  };
+  const handleStartEmailFlow = () => toast.info('Acesse a aba Automação para configurar o fluxo de boas-vindas');
 
   const handleSendWhatsApp = () => {
     if (!company) return;
-    const phone = (company.ddd_telefone_1 || company.ddd_telefone_2).replace(/\D/g, '');
+    const phone = normalizePhone(company.ddd_telefone_1 || company.ddd_telefone_2);
+    if (!phone) return;
     const msg = encodeURIComponent(`Olá! Somos especializados em soluções de transporte e logística. Gostaríamos de apresentar nossos serviços para a ${company.nome_fantasia || company.razao_social}.`);
     window.open(`https://wa.me/55${phone}?text=${msg}`, '_blank');
     toast.success('WhatsApp aberto em nova aba');
@@ -190,17 +172,20 @@ export default function Prospeccao() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="font-display text-3xl font-bold">Prospecção B2B</h1>
-          <p className="text-muted-foreground mt-1">
-            Consulte dados oficiais da Receita Federal e importe leads qualificados
-          </p>
+      <div className="space-y-4">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="font-display text-3xl font-bold">Prospecção B2B</h1>
+            <p className="text-muted-foreground mt-1 text-sm">
+              Consulte dados oficiais da Receita Federal e importe leads qualificados
+            </p>
+          </div>
         </div>
 
-        <ProspeccaoDashboard
+        <ProspeccaoStatusBar
           consultadasHoje={consultadasHoje}
           importadasHoje={importadasHoje}
+          emailsHoje={emailsHoje}
         />
 
         <Tabs defaultValue="consulta" className="space-y-4">
@@ -218,28 +203,47 @@ export default function Prospeccao() {
           <TabsContent value="consulta" className="space-y-4">
             <CNPJSearchCard onSearch={handleSearch} loading={loading} />
 
-            {company && (
-              <CompanyPreviewCard
-                company={company}
-                onImport={handleImport}
-                importing={importing}
-                alreadyImported={alreadyImported}
-                onStartEmailFlow={alreadyImported ? handleStartEmailFlow : undefined}
-                onSendWhatsApp={alreadyImported ? handleSendWhatsApp : undefined}
-              />
-            )}
+            {/* Split-screen for individual search */}
+            {company ? (
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-4 items-start">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Building2 className="h-5 w-5" />
+                      Histórico de Consultas
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ConsultaHistoryTable consultas={consultas} />
+                  </CardContent>
+                </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Building2 className="h-5 w-5" />
-                  Histórico de Consultas
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ConsultaHistoryTable consultas={consultas} />
-              </CardContent>
-            </Card>
+                <div className="lg:sticky lg:top-4">
+                  <Card className="overflow-hidden">
+                    <LeadDetailPanel
+                      company={company}
+                      onImport={handleImport}
+                      importing={importing}
+                      alreadyImported={alreadyImported}
+                      onStartEmailFlow={alreadyImported ? handleStartEmailFlow : undefined}
+                      onSendWhatsApp={alreadyImported ? handleSendWhatsApp : undefined}
+                    />
+                  </Card>
+                </div>
+              </div>
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Building2 className="h-5 w-5" />
+                    Histórico de Consultas
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ConsultaHistoryTable consultas={consultas} />
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="mineracao">
