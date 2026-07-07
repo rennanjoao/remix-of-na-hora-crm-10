@@ -317,6 +317,7 @@ export type Database = {
           fonte: string | null
           foto_url: string | null
           id: string
+          loss_reason: string | null
           nome_fantasia: string | null
           place_id: string | null
           rating: number | null
@@ -342,6 +343,7 @@ export type Database = {
           fonte?: string | null
           foto_url?: string | null
           id?: string
+          loss_reason?: string | null
           nome_fantasia?: string | null
           place_id?: string | null
           rating?: number | null
@@ -367,6 +369,7 @@ export type Database = {
           fonte?: string | null
           foto_url?: string | null
           id?: string
+          loss_reason?: string | null
           nome_fantasia?: string | null
           place_id?: string | null
           rating?: number | null
