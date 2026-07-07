@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -97,15 +97,20 @@ export function MiningMode() {
       setCompanies(prev => prev.map((c, idx) => idx === i ? { ...c, status: 'loading' } : c));
       setCurrentIndex(i);
       try {
-        const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${companies[i].cnpj}`);
-        if (!res.ok) throw new Error(res.status === 404 ? 'Não encontrado' : `Erro ${res.status}`);
-        const data: BrasilAPICompany = await res.json();
-        setCompanies(prev => prev.map((c, idx) => idx === i ? { ...c, data, status: 'success' } : c));
+        const { data, error } = await supabase.functions.invoke('cnpj-enrich', {
+          body: { cnpj: companies[i].cnpj },
+        });
+        if (error) throw new Error(error.message || 'Erro no cache-through');
+        if (!data || (data as { error?: string }).error) {
+          throw new Error((data as { error?: string })?.error || 'Não encontrado');
+        }
+        setCompanies(prev => prev.map((c, idx) => idx === i ? { ...c, data: data as BrasilAPICompany, status: 'success' } : c));
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Erro';
         setCompanies(prev => prev.map((c, idx) => idx === i ? { ...c, status: 'error', error: msg } : c));
       }
       if (i < companies.length - 1 && !abortRef.current) await new Promise(r => setTimeout(r, DELAY_MS));
+
     }
     setProcessing(false);
   }, [companies, currentIndex]);
@@ -142,6 +147,18 @@ export function MiningMode() {
     }
     return true;
   });
+
+  // Fila acionável (empresas ativas ainda não importadas)
+  const actionableQueue = useMemo(
+    () => filtered.filter(c => c.data?.situacao_cadastral === 2 && !importedCNPJs.has(c.cnpj.replace(/\D/g, ''))),
+    [filtered, importedCNPJs]
+  );
+
+  useEffect(() => {
+    if (!selectedCNPJ && actionableQueue.length > 0) {
+      setSelectedCNPJ(actionableQueue[0].cnpj);
+    }
+  }, [selectedCNPJ, actionableQueue]);
 
   const selectedCount = filtered.filter(c => c.selected).length;
   const successCount = companies.filter(c => c.status === 'success').length;
@@ -273,6 +290,7 @@ export function MiningMode() {
       toast.error('Erro ao importar lead');
     } finally {
       setImportingDetail(false);
+      setSelectedCNPJ(null);
     }
   };
 
@@ -451,6 +469,7 @@ export function MiningMode() {
                   onToggle={() => toggleSelect(c.cnpj)}
                   onClick={() => setSelectedCNPJ(c.cnpj === selectedCNPJ ? null : c.cnpj)}
                   isHighlighted={c.cnpj === selectedCNPJ}
+                  isNextInQueue={c.cnpj === actionableQueue[0]?.cnpj}
                 />
               ))}
             </div>

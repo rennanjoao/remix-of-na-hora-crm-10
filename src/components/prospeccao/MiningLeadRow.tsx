@@ -14,9 +14,10 @@ interface MiningLeadRowProps {
   onToggle: () => void;
   onClick: () => void;
   isHighlighted: boolean;
+  isNextInQueue?: boolean;
 }
 
-export function MiningLeadRow({ company, cnpj, selected, hotZoneBairros, onToggle, onClick, isHighlighted }: MiningLeadRowProps) {
+export function MiningLeadRow({ company, cnpj, selected, hotZoneBairros, onToggle, onClick, isHighlighted, isNextInQueue }: MiningLeadRowProps) {
   const cnaeCode = String(company.cnae_fiscal);
   const setor = classificarCNAE(cnaeCode);
   const config = SETOR_CONFIG[setor];
@@ -31,7 +32,8 @@ export function MiningLeadRow({ company, cnpj, selected, hotZoneBairros, onToggl
         isHighlighted
           ? 'bg-primary/10 border-primary/30'
           : 'border-transparent hover:bg-muted/60 hover:border-border',
-        isHotZone && !isHighlighted && 'border-l-2 border-l-amber-400/60'
+        isHotZone && !isHighlighted && 'border-l-2 border-l-amber-400/60',
+        isNextInQueue && !isHighlighted && 'ring-1 ring-primary/40 animate-pulse'
       )}
       onClick={onClick}
     >
