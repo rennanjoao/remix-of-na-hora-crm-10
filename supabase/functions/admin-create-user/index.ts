@@ -71,12 +71,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 3) Upsert do role escolhido (o trigger handle_new_user já criou 'sdr' por padrão)
-    const { error: upsertErr } = await admin
+    // 3) Substitui o role padrão criado pelo trigger handle_new_user
+    await admin.from("user_roles").delete().eq("user_id", created.user.id);
+    const { error: insertErr } = await admin
       .from("user_roles")
-      .upsert({ user_id: created.user.id, role }, { onConflict: "user_id" });
-    if (upsertErr) {
-      return new Response(JSON.stringify({ error: `Usuário criado, mas falhou ao definir role: ${upsertErr.message}` }), {
+      .insert({ user_id: created.user.id, role });
+    if (insertErr) {
+      return new Response(JSON.stringify({ error: `Usuário criado, mas falhou ao definir role: ${insertErr.message}` }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
