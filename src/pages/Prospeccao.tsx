@@ -14,6 +14,7 @@ import { LeadDetailPanel } from '@/components/prospeccao/LeadDetailPanel';
 import { ConsultaHistoryTable } from '@/components/prospeccao/ConsultaHistoryTable';
 import { PlacesSearchMode } from '@/components/prospeccao/PlacesSearchMode';
 import { ProspeccaoStatusBar } from '@/components/prospeccao/ProspeccaoStatusBar';
+import { ReactivationList } from '@/components/prospeccao/ReactivationList';
 
 interface Consulta {
   id: string;
@@ -187,6 +188,9 @@ export default function Prospeccao() {
           importadasHoje={importadasHoje}
           emailsHoje={emailsHoje}
         />
+
+        <ReactivationList />
+
 
         <Tabs defaultValue="busca" className="space-y-4">
           <TabsList>
