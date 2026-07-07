@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
+import CommandCenter from "./pages/CommandCenter";
 import Leads from "./pages/Leads";
 import Prospeccao from "./pages/Prospeccao";
 import Calendario from "./pages/Calendario";
@@ -74,6 +75,14 @@ const App = () => (
               element={
                 <ProtectedRoute roles={["admin", "sdr", "gerente"]}>
                   <Calendario />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/command-center"
+              element={
+                <ProtectedRoute roles={["admin", "gerente"]}>
+                  <CommandCenter />
                 </ProtectedRoute>
               }
             />
