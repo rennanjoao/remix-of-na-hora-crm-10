@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrasilAPICompany } from '@/hooks/useBrasilAPI';
 import { classificarCNAE, isAltoPotencialLogistica, SETOR_CONFIG } from '@/lib/cnae-classifier';
 import { Badge } from '@/components/ui/badge';
