@@ -69,7 +69,7 @@ export default function CommandCenter() {
 
   const fetchPerf = async () => {
     setLoadingPerf(true);
-    const { data, error } = await supabase.rpc('get_sdr_performance', { _days: 1 });
+    const { data, error } = await (supabase as any).rpc('get_sdr_performance', { _days: 1 });
     if (!error && data) setPerf(data as SdrPerfRow[]);
     setLoadingPerf(false);
   };
