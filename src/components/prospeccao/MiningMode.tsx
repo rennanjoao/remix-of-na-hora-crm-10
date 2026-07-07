@@ -148,6 +148,18 @@ export function MiningMode() {
     return true;
   });
 
+  // Fila acionável (empresas ativas ainda não importadas)
+  const actionableQueue = useMemo(
+    () => filtered.filter(c => c.data?.situacao_cadastral === 2 && !importedCNPJs.has(c.cnpj.replace(/\D/g, ''))),
+    [filtered, importedCNPJs]
+  );
+
+  useEffect(() => {
+    if (!selectedCNPJ && actionableQueue.length > 0) {
+      setSelectedCNPJ(actionableQueue[0].cnpj);
+    }
+  }, [selectedCNPJ, actionableQueue]);
+
   const selectedCount = filtered.filter(c => c.selected).length;
   const successCount = companies.filter(c => c.status === 'success').length;
   const errorCount = companies.filter(c => c.status === 'error').length;
