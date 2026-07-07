@@ -74,13 +74,15 @@ Deno.serve(async (req) => {
             "places.primaryTypeDisplayName",
             "places.photos",
             "places.businessStatus",
+            "nextPageToken",
           ].join(","),
         },
         body: JSON.stringify({
           textQuery: String(text_query),
           languageCode: "pt-BR",
           regionCode: "BR",
-          maxResultCount: Math.min(Math.max(Number(max_results) || 15, 1), 20),
+          maxResultCount: Math.min(Math.max(Number(max_results) || 20, 1), 20),
+          ...(page_token ? { pageToken: String(page_token) } : {}),
         }),
       });
 
@@ -116,7 +118,7 @@ Deno.serve(async (req) => {
         };
       });
 
-      return new Response(JSON.stringify({ results: items, _source: "live" }), {
+      return new Response(JSON.stringify({ results: items, next_page_token: listData.nextPageToken || null, _source: "live" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
