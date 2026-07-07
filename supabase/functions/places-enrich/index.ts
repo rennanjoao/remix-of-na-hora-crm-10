@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { cnpj, razao_social, nome_fantasia, municipio, uf, photo_name, max_width, text_query, max_results } = await req.json();
+    const { cnpj, razao_social, nome_fantasia, municipio, uf, photo_name, max_width, text_query, max_results, page_token } = await req.json();
 
     // Photo proxy mode
     if (photo_name) {
