@@ -469,6 +469,7 @@ export function MiningMode() {
                   onToggle={() => toggleSelect(c.cnpj)}
                   onClick={() => setSelectedCNPJ(c.cnpj === selectedCNPJ ? null : c.cnpj)}
                   isHighlighted={c.cnpj === selectedCNPJ}
+                  isNextInQueue={c.cnpj === actionableQueue[0]?.cnpj}
                 />
               ))}
             </div>
