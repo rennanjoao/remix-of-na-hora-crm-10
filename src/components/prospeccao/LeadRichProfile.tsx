@@ -132,9 +132,13 @@ export function LeadRichProfile({ cnpj, razaoSocial, nomeFantasia, municipio, uf
             </a>
           </Button>
         )}
-        {data.google_maps_uri && (
+        {data.formatted_address && (
           <Button asChild size="sm" variant="outline" className="h-8">
-            <a href={data.google_maps_uri} target="_blank" rel="noopener noreferrer">
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.formatted_address)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
               Maps
             </a>

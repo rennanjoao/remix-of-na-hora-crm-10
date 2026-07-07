@@ -6,13 +6,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Loader2, Building2, Search, Pickaxe, Sparkles } from 'lucide-react';
+import { Loader2, Building2, Search, Sparkles } from 'lucide-react';
 
 import { useBrasilAPI } from '@/hooks/useBrasilAPI';
 import { CNPJSearchCard } from '@/components/prospeccao/CNPJSearchCard';
 import { LeadDetailPanel } from '@/components/prospeccao/LeadDetailPanel';
 import { ConsultaHistoryTable } from '@/components/prospeccao/ConsultaHistoryTable';
-import { MiningMode } from '@/components/prospeccao/MiningMode';
 import { PlacesSearchMode } from '@/components/prospeccao/PlacesSearchMode';
 import { ProspeccaoStatusBar } from '@/components/prospeccao/ProspeccaoStatusBar';
 
@@ -199,10 +198,6 @@ export default function Prospeccao() {
               <Search className="h-4 w-4" />
               Consulta por CNPJ
             </TabsTrigger>
-            <TabsTrigger value="mineracao" className="gap-2">
-              <Pickaxe className="h-4 w-4" />
-              Modo Mineração
-            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="busca" className="space-y-4">
@@ -254,10 +249,6 @@ export default function Prospeccao() {
                 </CardContent>
               </Card>
             )}
-          </TabsContent>
-
-          <TabsContent value="mineracao">
-            <MiningMode />
           </TabsContent>
         </Tabs>
       </div>
