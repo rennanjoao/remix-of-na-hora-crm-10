@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { Loader2, UserCog, Search, Shield, UserCheck, UserX } from 'lucide-react';
+import { CreateUserDialog } from '@/components/admin/CreateUserDialog';
 
 type AppRole = 'admin' | 'sdr' | 'gerente' | 'motorista';
 
@@ -170,14 +171,17 @@ export default function Admin() {
                 </CardTitle>
                 <CardDescription>{users.length} usuários cadastrados</CardDescription>
               </div>
-              <div className="relative w-64">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar usuários..."
-                  className="pl-9"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+              <div className="flex items-center gap-2">
+                <div className="relative w-64">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar usuários..."
+                    className="pl-9"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                <CreateUserDialog onCreated={fetchUsers} />
               </div>
             </div>
           </CardHeader>
