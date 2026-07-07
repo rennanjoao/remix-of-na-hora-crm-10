@@ -109,40 +109,39 @@ export function ScheduleMeetingModal({ open, onOpenChange, lead, onMeetingCreate
     setSaving(true);
     try {
       const meetingDate = new Date(`${format(selectedDate, 'yyyy-MM-dd')}T${form.start_time}`);
-      const dateStr = format(selectedDate, 'ddMMyyyy');
-      const companySlug = sanitizeForUrl(activeLead.nome_fantasia || activeLead.razao_social);
-      const jitsiLink = `https://meet.jit.si/NaHora-${companySlug}-${dateStr}`;
 
-      const { error } = await supabase.from('meetings').insert({
-        lead_id: activeLead.id,
-        sdr_id: sdrId,
-        created_by: profile.id,
-        title: form.title,
-        description: form.description || null,
-        meeting_date: meetingDate.toISOString(),
-        duration_minutes: parseInt(form.duration),
-        jitsi_link: jitsiLink,
-        contact_name: form.contact_name || null,
+      const { data, error } = await supabase.functions.invoke('schedule-meeting', {
+        body: {
+          lead_id: activeLead.id,
+          sdr_id: sdrId,
+          title: form.title,
+          description: form.description || undefined,
+          start_time: meetingDate.toISOString(),
+          duration_minutes: parseInt(form.duration),
+          contact_name: form.contact_name || undefined,
+          decisor_email: activeLead.email || undefined,
+        },
       });
 
       if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || 'Erro no agendamento');
 
-      // Also add timeline entry
+      const linkLabel = data.source === 'google_meet' ? 'Google Meet' : 'Jitsi (fallback)';
       await supabase.from('lead_timeline').insert({
         lead_id: activeLead.id,
         author_id: profile.id,
-        content: `📅 Reunião agendada: ${form.title} — ${format(meetingDate, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`,
+        content: `📅 Reunião agendada (${linkLabel}): ${form.title} — ${format(meetingDate, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}\n🔗 ${data.meeting_link}`,
         contact_type: 'meeting',
       });
 
-      toast.success('Reunião agendada com sucesso!');
+      toast.success(`Reunião agendada! Link: ${linkLabel}`);
       onOpenChange(false);
       setSelectedDate(undefined);
       setForm({ title: '', description: '', contact_name: '', start_time: '09:00', duration: '30', sdr_id: profile?.id || '' });
       onMeetingCreated?.();
     } catch (error) {
       console.error('Error creating meeting:', error);
-      toast.error('Erro ao agendar reunião');
+      toast.error(error instanceof Error ? error.message : 'Erro ao agendar reunião');
     } finally {
       setSaving(false);
     }
@@ -277,8 +276,8 @@ export function ScheduleMeetingModal({ open, onOpenChange, lead, onMeetingCreate
           </div>
 
           <div className="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground mb-1">🔗 Link da reunião (Jitsi Meet)</p>
-            <p>O link será gerado automaticamente ao salvar.</p>
+            <p className="font-medium text-foreground mb-1">🔗 Link da reunião</p>
+            <p>Google Meet real quando as credenciais estão configuradas — senão, Jitsi como fallback.</p>
           </div>
 
           <Button onClick={handleSave} className="w-full" disabled={saving || !form.title || !selectedDate || !activeLead}>
