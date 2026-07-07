@@ -198,10 +198,6 @@ export default function Prospeccao() {
               <Search className="h-4 w-4" />
               Consulta por CNPJ
             </TabsTrigger>
-            <TabsTrigger value="mineracao" className="gap-2">
-              <Pickaxe className="h-4 w-4" />
-              Modo Mineração
-            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="busca" className="space-y-4">
