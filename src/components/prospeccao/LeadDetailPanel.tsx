@@ -184,6 +184,17 @@ export function LeadDetailPanel({ company, onImport, importing, alreadyImported,
 
       <Separator />
 
+      <LeadRichProfile
+        cnpj={company.cnpj}
+        razaoSocial={company.razao_social}
+        nomeFantasia={company.nome_fantasia}
+        municipio={company.municipio}
+        uf={company.uf}
+      />
+
+      <Separator />
+
+
       {/* Actions */}
       <div className="space-y-2 pb-2">
         {!alreadyImported ? (
