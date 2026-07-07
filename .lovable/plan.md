@@ -1,42 +1,77 @@
-# Plano — Correções de Arquitetura, RBAC e Prospecção
+# Refatoração do módulo de prospecção — 8 etapas
 
-Este é um trabalho grande (6 fases, várias migrations + refactor de front). Proponho executar **fase por fase**, confirmando cada uma antes de prosseguir, exatamente como o próprio prompt sugere. Isso evita corromper dados de produção e permite validar cada etapa no preview.
+Antes de começar, preciso **confirmar 3 pontos bloqueantes** (principalmente Etapa 4) para não travar no meio da implementação.
 
-## Fase 1 — Segurança de rotas + `is_active` em `has_role` (crítico)
-- Novo `src/components/ProtectedRoute.tsx`.
-- Envolver rotas em `src/App.tsx` com `ProtectedRoute` usando os arrays de `navItems`.
-- Migration: recriar `public.has_role()` com JOIN em `profiles.is_active = true`.
-- Verificar que nenhuma policy quebra (todas usam `has_role`).
+---
 
-## Fase 2 — Chamada instantânea por lead + fix do `lead_id` fake
-- Em `Leads.tsx`: `startInstantCallForLead(lead)`, botão `Zap` na linha, iframe Jitsi inline.
-- Em `Reunioes.tsx`: remover fallback `leads[0]?.id || profile.id`; desabilitar botão "Iniciar Agora" sem lead selecionado (até Fase 4 tornar `lead_id` nullable).
+## Perguntas bloqueantes
 
-## Fase 3 — Tela "Fila de Follow-up" (landing do SDR)
-- Migration: `leads.next_follow_up_at`, `last_contact_at` + índice parcial.
-- Nova página `src/pages/FollowUp.tsx` com 3 seções (Atrasados / Hoje / Próximos).
-- Ações inline: Ligar Agora, WhatsApp, Adiar, Marcar contato feito.
-- Rota `/follow-up` + item no sidebar (antes de "Leads").
-- Redirect pós-login: SDR → `/follow-up`, admin/gerente → `/dashboard`.
+### 1. Google Meet real (Etapa 4) — como autenticar?
 
-## Fase 4 — Concorrência entre SDRs
-- Migration: `claim_lead()`, tabela `lead_locks` (+ RLS), `round_robin_state` + trigger `assign_round_robin`, índice único parcial em `leads.cnpj`, `meetings.lead_id` nullable com `ON DELETE SET NULL`.
-- `MiningMode.tsx`: `upsert` com `onConflict: 'cnpj'`.
-- `Leads.tsx`: checar/criar/renovar/deletar lock ao abrir "Detalhes"; usar `rpc('claim_lead')` para leads sem dono.
+Criar Meet real pela Google Calendar API **não é gratuito de configurar** — exige credenciais. Duas opções:
 
-## Fase 5 — Log automático de status + dashboards separados
-- Migration: `lead_status_history` + trigger + policies + views `funnel_by_sdr` e `conversion_by_source`.
-- Refactor `Dashboard.tsx` → roteador entre `SDRDashboard.tsx` (métricas pessoais) e `LeadershipDashboard.tsx` (agregados; drill-down via query params para `Leads.tsx`).
+- **A) OAuth refresh token do Felipe (recomendado, mais simples):** você precisa criar um projeto no Google Cloud Console, habilitar Calendar API, criar OAuth Client ID (Web), rodar uma vez o fluxo de consent com a conta do Felipe e me passar o `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` e `GOOGLE_OAUTH_REFRESH_TOKEN` como secrets. Todo evento é criado no calendário do Felipe.
+- **B) Service Account com Domain-Wide Delegation:** exige Google Workspace (pago) e admin do domínio. Só faz sentido se vocês já tiverem Workspace.
+- **C) Conector Google Calendar da Lovable:** já disponível, mas ele acessa o calendário do **dono da conexão** (você), não do Felipe — pode ou não servir dependendo de quem organiza as reuniões.
 
-## Fase 6 (opcional) — Duração real via Jitsi IFrame API
-- Migration: `call_sessions` + RLS.
-- Substituir `<iframe>` cru por `JitsiMeetExternalAPI`, registrando `videoConferenceJoined`/`Left` para gravar duração real.
+**Confirma qual caminho?** Se A, posso deixar a edge function pronta e você me passa os secrets depois; enquanto isso o botão "Agendar" fica em modo Jitsi (fallback) para não quebrar.
 
-## Detalhes técnicos
-- Migrations novas apenas (nunca editar as já aplicadas).
-- Regenerar `types.ts` após cada migration.
-- Nenhuma RLS existente será removida — apenas complementada.
-- Validação ao fim de cada fase: abrir `Leads`, `Reunioes`, `Dashboard` sem erro no console.
+### 2. Etapa 5 — trigger de banco ou frontend?
 
-## Como quer prosseguir?
-Recomendo começar **agora pela Fase 1** (é o buraco de segurança ativo) e, ao terminar, eu paro e aguardo seu OK para a Fase 2. Se preferir, posso emendar Fase 1 + Fase 2 direto, ou executar tudo até a Fase 5 (Fase 6 é opcional) sem parar. Diga qual ritmo prefere.
+Você deu as duas opções. **Recomendo frontend** (chamar `enrollLeadInCampaign()` logo depois do UPDATE do `contact_outcome`), porque:
+- trigger de banco precisaria ler `email_campaigns`/`email_steps` e agendar `email_sends` com `scheduled_at = now + delay_days` — dá pra fazer, mas fica opaco pra debug;
+- frontend reusa a lógica já existente em `Automacao.tsx` e é fácil de testar.
+
+Confirma **frontend**? (se preferir trigger, faço).
+
+### 3. Etapa 7 — scrape de site
+
+Fetch direto de site externo funciona em edge function (sem CORS), mas alguns sites (Cloudflare, bot-protection) devolvem 403. Aceita que nesses casos a função apenas retorne `emails: []` sem erro, e o card mostre "não foi possível extrair automaticamente"? (alternativa paga seria Firecrawl).
+
+---
+
+## Plano de implementação (após respostas)
+
+### Etapa 1 — Migration SQL
+Nova migration com o enum `contact_outcome`, 4 colunas em `leads`, e a função `leads_para_reativar()`. GRANTs preservados. `loss_reason` mantido.
+
+### Etapa 2 — Refatorar `PlacesSearchMode.tsx`
+Trocar `LOSS_REASONS` por `CONTACT_OUTCOMES` (6 opções), cada uma com um handler que calcula `next_contact_date`, `status`, `is_suppressed` e chama UPDATE. Se lead ainda não importado, importa antes.
+
+### Etapa 3 — Importação em lote
+Botão "Importar todos os visíveis (N)" acima da lista. Roda `handleImport` em `Promise.all` com estado `{ current, total }` mostrando "Importando X de Y…". Skipa os que já estão em `importedIds`.
+
+### Etapa 4 — Edge function `schedule-meeting`
+- Novo arquivo `supabase/functions/schedule-meeting/index.ts` seguindo padrão de `places-enrich`.
+- Renomeia `meetings.jitsi_link` para `meeting_link` via migration ALTER (mantendo dados antigos: `ALTER … RENAME COLUMN`).
+- Chama Google Calendar API `events.insert` com `conferenceDataVersion=1` e `conferenceData.createRequest` → devolve `hangoutLink`.
+- Fallback Jitsi se secrets Google ausentes.
+- Novo modal `ScheduleMeetingWithOutcomeModal` (reusa o `ScheduleMeetingModal` existente se possível), aberto automaticamente quando outcome = `decisor_apresentado`.
+
+### Etapa 5 — Enrollment em cadência
+Nova função utilitária `enrollLeadInCampaign(leadId, campaignSlug)` em `src/lib/campaign-enroll.ts`. Lê `email_campaigns` por slug, lê `email_steps`, insere N rows em `email_sends` com `scheduled_at` computado. Verifica duplicidade (`WHERE lead_id=… AND campaign_id=… AND status IN ('pending','sent')`). Chamada dentro do handler da Etapa 2 para os outcomes `pediu_apresentacao` (slug `apresentacao-institucional`) e `sem_resposta` (slug `recaptura-pos-silencio`).
+
+**Nota:** vou precisar checar se `email_campaigns` tem coluna `slug` (senão, adiciono via migration nesta etapa) e se as duas campanhas já existem (senão, alerto e não crio automaticamente).
+
+### Etapa 6 — Card de reativação no Dashboard
+Adicionar 4º card no grid do `ProspeccaoDashboard.tsx` (grid vira `md:grid-cols-4`). Chama `supabase.rpc('leads_para_reativar')` e mostra top 5 com botão "Reabrir contato" que:
+- UPDATE `leads` set `status='novo'`, `is_suppressed=false`, `next_contact_date=null`
+- INSERT em `lead_timeline` com o outcome anterior preservado (`event_type='reactivation'`, `metadata: { previous_outcome, previous_loss_reason }`)
+
+### Etapa 7 — Edge function `site-email-scrape`
+- Fetch da home + `/contato` (2 tentativas paralelas, timeout 5s cada).
+- Regex `mailto:` (confidence=high) e `[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}` (medium), filtrando lixo (`example.com`, `sentry.io`, `wixpress.com`).
+- Cache em `sessionStorage` por website URL no frontend.
+- Chamada automática no `useEffect` do card com `item.website`, mostrando pill "e-mail encontrado" com botão copiar + input editável.
+
+### Etapa 8 — WhatsApp personalizado + timeline
+- Nova função `buildWhatsAppMessage(item)` usando template com `item.category` e `item.city`.
+- Após `window.open(...)`, insert em `lead_timeline` com `contact_type='whatsapp'`, `event_type='outbound_attempt'`.
+
+---
+
+## Ordem de execução
+
+Faço 1 → 3 → 5 → 6 → 7 → 8 → 2 → 4, porque a Etapa 2 depende do enrollment (Etapa 5) e do modal de agendamento (Etapa 4). Cada etapa vai num turno separado com verificação (build, spot-check via edge function curl).
+
+**Aguardo as respostas às 3 perguntas para começar pela Etapa 1.**
