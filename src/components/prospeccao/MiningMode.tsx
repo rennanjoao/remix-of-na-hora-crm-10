@@ -290,6 +290,7 @@ export function MiningMode() {
       toast.error('Erro ao importar lead');
     } finally {
       setImportingDetail(false);
+      setSelectedCNPJ(null);
     }
   };
 
