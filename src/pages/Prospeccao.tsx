@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Loader2, Building2, Search, Pickaxe } from 'lucide-react';
+import { Loader2, Building2, Search, Pickaxe, Sparkles } from 'lucide-react';
 
 import { useBrasilAPI } from '@/hooks/useBrasilAPI';
 import { CNPJSearchCard } from '@/components/prospeccao/CNPJSearchCard';
