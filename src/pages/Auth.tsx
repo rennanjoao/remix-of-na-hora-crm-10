@@ -14,33 +14,15 @@ const loginSchema = z.object({
   password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
 });
 
-const signupSchema = z.object({
-  fullName: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
-  email: z.string().email('E-mail inválido'),
-  password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
-  confirmPassword: z.string(),
-}).refine(data => data.password === data.confirmPassword, {
-  message: 'Senhas não coincidem',
-  path: ['confirmPassword'],
-});
-
 export default function Auth() {
   const navigate = useNavigate();
-  const { user, signIn, signUp, loading: authLoading } = useAuth();
-  
+  const { user, signIn, loading: authLoading } = useAuth();
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
-  // Login form state
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-
-  // Signup form state
-  const [signupFullName, setSignupFullName] = useState('');
-  const [signupEmail, setSignupEmail] = useState('');
-  const [signupPassword, setSignupPassword] = useState('');
-  const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
 
   useEffect(() => {
     if (user && !authLoading) {
