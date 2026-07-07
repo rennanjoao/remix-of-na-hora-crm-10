@@ -58,44 +58,6 @@ export default function Auth() {
     }
   };
 
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-    setIsLoading(true);
-
-    try {
-      const validation = signupSchema.safeParse({
-        fullName: signupFullName,
-        email: signupEmail,
-        password: signupPassword,
-        confirmPassword: signupConfirmPassword,
-      });
-
-      if (!validation.success) {
-        setError(validation.error.errors[0].message);
-        setIsLoading(false);
-        return;
-      }
-
-      const { error } = await signUp(signupEmail, signupPassword, signupFullName);
-      if (error) {
-        if (error.message.includes('already registered')) {
-          setError('Este e-mail já está cadastrado');
-        } else {
-          setError(error.message);
-        }
-      } else {
-        setSuccess('Cadastro realizado! Verifique seu e-mail para confirmar a conta.');
-        setSignupFullName('');
-        setSignupEmail('');
-        setSignupPassword('');
-        setSignupConfirmPassword('');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   if (authLoading) {
     return (
