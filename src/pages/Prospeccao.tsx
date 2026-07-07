@@ -6,13 +6,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Loader2, Building2, Search, Pickaxe } from 'lucide-react';
+import { Loader2, Building2, Search, Pickaxe, Sparkles } from 'lucide-react';
 
 import { useBrasilAPI } from '@/hooks/useBrasilAPI';
 import { CNPJSearchCard } from '@/components/prospeccao/CNPJSearchCard';
 import { LeadDetailPanel } from '@/components/prospeccao/LeadDetailPanel';
 import { ConsultaHistoryTable } from '@/components/prospeccao/ConsultaHistoryTable';
 import { MiningMode } from '@/components/prospeccao/MiningMode';
+import { PlacesSearchMode } from '@/components/prospeccao/PlacesSearchMode';
 import { ProspeccaoStatusBar } from '@/components/prospeccao/ProspeccaoStatusBar';
 
 interface Consulta {
@@ -188,17 +189,26 @@ export default function Prospeccao() {
           emailsHoje={emailsHoje}
         />
 
-        <Tabs defaultValue="consulta" className="space-y-4">
+        <Tabs defaultValue="busca" className="space-y-4">
           <TabsList>
+            <TabsTrigger value="busca" className="gap-2">
+              <Sparkles className="h-4 w-4" />
+              Buscar por Segmento
+            </TabsTrigger>
             <TabsTrigger value="consulta" className="gap-2">
               <Search className="h-4 w-4" />
-              Consulta Individual
+              Consulta por CNPJ
             </TabsTrigger>
             <TabsTrigger value="mineracao" className="gap-2">
               <Pickaxe className="h-4 w-4" />
               Modo Mineração
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="busca" className="space-y-4">
+            <PlacesSearchMode />
+          </TabsContent>
+
 
           <TabsContent value="consulta" className="space-y-4">
             <CNPJSearchCard onSearch={handleSearch} loading={loading} />
