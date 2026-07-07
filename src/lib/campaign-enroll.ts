@@ -10,11 +10,12 @@ export async function enrollLeadInCampaign(
   campaignSlug: string,
   sdrId: string,
 ): Promise<{ enrolled: boolean; reason?: string }> {
-  const { data: campaign } = await supabase
-    .from('email_campaigns')
+  const { data: campaign } = await (supabase
+    .from('email_campaigns') as any)
     .select('id, status')
     .eq('slug', campaignSlug)
     .maybeSingle();
+
 
   if (!campaign) return { enrolled: false, reason: `Campaign "${campaignSlug}" not found` };
   if (campaign.status !== 'active') return { enrolled: false, reason: 'Campaign not active' };
