@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { Loader2, UserCog, Search, Shield, UserCheck, UserX } from 'lucide-react';
+import { CreateUserDialog } from '@/components/admin/CreateUserDialog';
 
 type AppRole = 'admin' | 'sdr' | 'gerente' | 'motorista';
 
