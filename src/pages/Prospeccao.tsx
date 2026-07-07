@@ -189,17 +189,26 @@ export default function Prospeccao() {
           emailsHoje={emailsHoje}
         />
 
-        <Tabs defaultValue="consulta" className="space-y-4">
+        <Tabs defaultValue="busca" className="space-y-4">
           <TabsList>
+            <TabsTrigger value="busca" className="gap-2">
+              <Sparkles className="h-4 w-4" />
+              Buscar por Segmento
+            </TabsTrigger>
             <TabsTrigger value="consulta" className="gap-2">
               <Search className="h-4 w-4" />
-              Consulta Individual
+              Consulta por CNPJ
             </TabsTrigger>
             <TabsTrigger value="mineracao" className="gap-2">
               <Pickaxe className="h-4 w-4" />
               Modo Mineração
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="busca" className="space-y-4">
+            <PlacesSearchMode />
+          </TabsContent>
+
 
           <TabsContent value="consulta" className="space-y-4">
             <CNPJSearchCard onSearch={handleSearch} loading={loading} />
