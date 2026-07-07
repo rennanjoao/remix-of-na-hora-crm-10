@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Loader2, Download, Mail, MessageCircle, Building2, MapPin, Phone, AtSign, Truck, AlertTriangle, Hash, Calendar, DollarSign, Users } from 'lucide-react';
+import { LeadRichProfile } from './LeadRichProfile';
 
 interface LeadDetailPanelProps {
   company: BrasilAPICompany;
@@ -182,6 +183,17 @@ export function LeadDetailPanel({ company, onImport, importing, alreadyImported,
       </div>
 
       <Separator />
+
+      <LeadRichProfile
+        cnpj={company.cnpj}
+        razaoSocial={company.razao_social}
+        nomeFantasia={company.nome_fantasia}
+        municipio={company.municipio}
+        uf={company.uf}
+      />
+
+      <Separator />
+
 
       {/* Actions */}
       <div className="space-y-2 pb-2">
