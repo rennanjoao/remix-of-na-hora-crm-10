@@ -107,6 +107,7 @@ export type Database = {
           description: string | null
           id: string
           name: string
+          slug: string | null
           status: string
           updated_at: string
         }
@@ -116,6 +117,7 @@ export type Database = {
           description?: string | null
           id?: string
           name: string
+          slug?: string | null
           status?: string
           updated_at?: string
         }
@@ -125,6 +127,7 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+          slug?: string | null
           status?: string
           updated_at?: string
         }
@@ -310,6 +313,7 @@ export type Database = {
           cnae_codigo: string | null
           cnae_descricao: string | null
           cnpj: string | null
+          contact_outcome: Database["public"]["Enums"]["contact_outcome"] | null
           created_at: string
           created_by: string | null
           email: string | null
@@ -317,12 +321,15 @@ export type Database = {
           fonte: string | null
           foto_url: string | null
           id: string
+          is_suppressed: boolean | null
           loss_reason: string | null
+          next_contact_date: string | null
           nome_decisor: string | null
           nome_fantasia: string | null
           place_id: string | null
           rating: number | null
           razao_social: string
+          reactivation_batch: string | null
           setor: string | null
           status: Database["public"]["Enums"]["lead_status"] | null
           telefone: string | null
@@ -337,6 +344,9 @@ export type Database = {
           cnae_codigo?: string | null
           cnae_descricao?: string | null
           cnpj?: string | null
+          contact_outcome?:
+            | Database["public"]["Enums"]["contact_outcome"]
+            | null
           created_at?: string
           created_by?: string | null
           email?: string | null
@@ -344,12 +354,15 @@ export type Database = {
           fonte?: string | null
           foto_url?: string | null
           id?: string
+          is_suppressed?: boolean | null
           loss_reason?: string | null
+          next_contact_date?: string | null
           nome_decisor?: string | null
           nome_fantasia?: string | null
           place_id?: string | null
           rating?: number | null
           razao_social: string
+          reactivation_batch?: string | null
           setor?: string | null
           status?: Database["public"]["Enums"]["lead_status"] | null
           telefone?: string | null
@@ -364,6 +377,9 @@ export type Database = {
           cnae_codigo?: string | null
           cnae_descricao?: string | null
           cnpj?: string | null
+          contact_outcome?:
+            | Database["public"]["Enums"]["contact_outcome"]
+            | null
           created_at?: string
           created_by?: string | null
           email?: string | null
@@ -371,12 +387,15 @@ export type Database = {
           fonte?: string | null
           foto_url?: string | null
           id?: string
+          is_suppressed?: boolean | null
           loss_reason?: string | null
+          next_contact_date?: string | null
           nome_decisor?: string | null
           nome_fantasia?: string | null
           place_id?: string | null
           rating?: number | null
           razao_social?: string
+          reactivation_batch?: string | null
           setor?: string | null
           status?: Database["public"]["Enums"]["lead_status"] | null
           telefone?: string | null
@@ -409,9 +428,10 @@ export type Database = {
           description: string | null
           duration_minutes: number
           id: string
-          jitsi_link: string
+          jitsi_link: string | null
           lead_id: string
           meeting_date: string
+          meeting_link: string | null
           meeting_type: string
           sdr_id: string
           status: string
@@ -425,9 +445,10 @@ export type Database = {
           description?: string | null
           duration_minutes?: number
           id?: string
-          jitsi_link: string
+          jitsi_link?: string | null
           lead_id: string
           meeting_date: string
+          meeting_link?: string | null
           meeting_type?: string
           sdr_id: string
           status?: string
@@ -441,9 +462,10 @@ export type Database = {
           description?: string | null
           duration_minutes?: number
           id?: string
-          jitsi_link?: string
+          jitsi_link?: string | null
           lead_id?: string
           meeting_date?: string
+          meeting_link?: string | null
           meeting_type?: string
           sdr_id?: string
           status?: string
@@ -615,9 +637,56 @@ export type Database = {
         }
         Returns: boolean
       }
+      leads_para_reativar: {
+        Args: never
+        Returns: {
+          assigned_to: string | null
+          bairro: string | null
+          cidade: string | null
+          cnae_codigo: string | null
+          cnae_descricao: string | null
+          cnpj: string | null
+          contact_outcome: Database["public"]["Enums"]["contact_outcome"] | null
+          created_at: string
+          created_by: string | null
+          email: string | null
+          estado: string | null
+          fonte: string | null
+          foto_url: string | null
+          id: string
+          is_suppressed: boolean | null
+          loss_reason: string | null
+          next_contact_date: string | null
+          nome_decisor: string | null
+          nome_fantasia: string | null
+          place_id: string | null
+          rating: number | null
+          razao_social: string
+          reactivation_batch: string | null
+          setor: string | null
+          status: Database["public"]["Enums"]["lead_status"] | null
+          telefone: string | null
+          updated_at: string
+          website: string | null
+          zona: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "leads"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
     }
     Enums: {
       app_role: "admin" | "sdr" | "gerente" | "motorista"
+      contact_outcome:
+        | "nao_usa_servico"
+        | "frota_propria"
+        | "pediu_apresentacao"
+        | "sem_interesse_momento"
+        | "sem_resposta"
+        | "decisor_apresentado"
       lead_status:
         | "novo"
         | "contato"
@@ -754,6 +823,14 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "sdr", "gerente", "motorista"],
+      contact_outcome: [
+        "nao_usa_servico",
+        "frota_propria",
+        "pediu_apresentacao",
+        "sem_interesse_momento",
+        "sem_resposta",
+        "decisor_apresentado",
+      ],
       lead_status: [
         "novo",
         "contato",
