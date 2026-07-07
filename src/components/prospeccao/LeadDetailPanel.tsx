@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Loader2, Download, Mail, MessageCircle, Building2, MapPin, Phone, AtSign, Truck, AlertTriangle, Hash, Calendar, DollarSign, Users } from 'lucide-react';
+import { LeadRichProfile } from './LeadRichProfile';
 
 interface LeadDetailPanelProps {
   company: BrasilAPICompany;
