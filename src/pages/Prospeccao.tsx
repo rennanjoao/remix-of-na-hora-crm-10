@@ -13,6 +13,7 @@ import { CNPJSearchCard } from '@/components/prospeccao/CNPJSearchCard';
 import { LeadDetailPanel } from '@/components/prospeccao/LeadDetailPanel';
 import { ConsultaHistoryTable } from '@/components/prospeccao/ConsultaHistoryTable';
 import { MiningMode } from '@/components/prospeccao/MiningMode';
+import { PlacesSearchMode } from '@/components/prospeccao/PlacesSearchMode';
 import { ProspeccaoStatusBar } from '@/components/prospeccao/ProspeccaoStatusBar';
 
 interface Consulta {
