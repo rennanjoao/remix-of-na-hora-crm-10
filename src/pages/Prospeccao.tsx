@@ -250,10 +250,6 @@ export default function Prospeccao() {
               </Card>
             )}
           </TabsContent>
-
-          <TabsContent value="mineracao">
-            <MiningMode />
-          </TabsContent>
         </Tabs>
       </div>
     </DashboardLayout>
