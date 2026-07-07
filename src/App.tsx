@@ -14,6 +14,7 @@ import Calendario from "./pages/Calendario";
 import Reunioes from "./pages/Reunioes";
 import Automacao from "./pages/Automacao";
 import NotFound from "./pages/NotFound";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -28,12 +29,54 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/admin" element={<Admin />} />
-            <Route path="/leads" element={<Leads />} />
-            <Route path="/prospeccao" element={<Prospeccao />} />
-            <Route path="/reunioes" element={<Reunioes />} />
-            <Route path="/automacao" element={<Automacao />} />
-            <Route path="/calendario" element={<Calendario />} />
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute roles={["admin"]}>
+                  <Admin />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/leads"
+              element={
+                <ProtectedRoute roles={["admin", "sdr", "gerente"]}>
+                  <Leads />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/prospeccao"
+              element={
+                <ProtectedRoute roles={["admin", "sdr"]}>
+                  <Prospeccao />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reunioes"
+              element={
+                <ProtectedRoute roles={["admin", "sdr", "gerente"]}>
+                  <Reunioes />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/automacao"
+              element={
+                <ProtectedRoute roles={["admin", "sdr"]}>
+                  <Automacao />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/calendario"
+              element={
+                <ProtectedRoute roles={["admin", "sdr", "gerente"]}>
+                  <Calendario />
+                </ProtectedRoute>
+              }
+            />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
