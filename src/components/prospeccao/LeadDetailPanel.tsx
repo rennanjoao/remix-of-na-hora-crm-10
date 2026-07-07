@@ -31,7 +31,25 @@ function isValidEmail(email: string | null): boolean {
 }
 
 export function LeadDetailPanel({ company, onImport, importing, alreadyImported, onStartEmailFlow, onSendWhatsApp }: LeadDetailPanelProps) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      if (e.key === 'Enter' && !importing && !alreadyImported) {
+        e.preventDefault();
+        onImport();
+      }
+      if ((e.key === 'w' || e.key === 'W') && alreadyImported && onSendWhatsApp) {
+        e.preventDefault();
+        onSendWhatsApp();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [importing, alreadyImported, onImport, onSendWhatsApp]);
+
   const cnaeCode = String(company.cnae_fiscal);
+
   const setor = classificarCNAE(cnaeCode);
   const altoPotencial = isAltoPotencialLogistica(cnaeCode);
   const config = SETOR_CONFIG[setor];
