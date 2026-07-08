@@ -209,11 +209,16 @@ export function PlacesSearchMode() {
   const visibleResults = useMemo(() => {
     const filtered = results
       .filter(r => !discardedIds.has(r.place_id))
-      .filter(r => !activeZone || matchesZone(r, activeZone));
+      .filter(r => !activeZone || matchesZone(r, activeZone))
+      .filter(r => {
+        if (statusTab === 'todos') return true;
+        const imported = importedIds.has(r.place_id);
+        return statusTab === 'novos' ? !imported : imported;
+      });
     if (sortMode === 'rating') return [...filtered].sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
     if (sortMode === 'reviews') return [...filtered].sort((a, b) => (b.rating_count ?? -1) - (a.rating_count ?? -1));
     return filtered;
-  }, [results, discardedIds, activeZone, sortMode]);
+  }, [results, discardedIds, activeZone, sortMode, statusTab, importedIds]);
 
   // Auto-scrape emails for visible cards with website
   useEffect(() => {
