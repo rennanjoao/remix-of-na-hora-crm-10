@@ -24,7 +24,7 @@ interface UserWithRole {
   user_id: string;
   full_name: string | null;
   email: string | null;
-  is_active: boolean;
+  is_active: boolean | null;
   role: AppRole;
   created_at: string;
 }

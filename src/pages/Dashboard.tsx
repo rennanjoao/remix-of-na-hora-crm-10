@@ -23,7 +23,7 @@ interface UpcomingMeeting {
   id: string;
   title: string;
   meeting_date: string;
-  jitsi_link: string;
+  jitsi_link: string | null;
   contact_name: string | null;
   lead_name?: string;
 }
