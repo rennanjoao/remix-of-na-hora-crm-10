@@ -9,6 +9,7 @@ interface Props {
   nomeFantasia?: string | null;
   municipio?: string | null;
   uf?: string | null;
+  onCallMade?: (phone: string) => void | Promise<void>;
 }
 
 export function LeadRichProfile(props: Props) {
@@ -65,7 +66,7 @@ export function LeadRichProfile(props: Props) {
       <div className="flex flex-wrap gap-1.5">
         {telHref && (
           <Button asChild size="sm" variant="default" className="h-8">
-            <a href={telHref}>
+            <a href={telHref} onClick={() => { if (data.phone) void props.onCallMade?.(data.phone); }}>
               <Phone className="h-3.5 w-3.5 mr-1.5" />
               Ligar {data.phone}
             </a>

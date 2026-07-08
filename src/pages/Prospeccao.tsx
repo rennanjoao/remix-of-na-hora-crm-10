@@ -180,6 +180,27 @@ export default function Prospeccao() {
     toast.success('WhatsApp aberto em nova aba');
   };
 
+  const handleCallMade = async (phone: string) => {
+    if (!profile || !company) return;
+    const cnpjClean = company.cnpj.replace(/\D/g, '');
+    const { data } = await supabase.from('leads').select('id').eq('cnpj', cnpjClean).maybeSingle();
+    if (!data?.id) return;
+
+    await supabase.from('lead_timeline').insert({
+      lead_id: data.id,
+      author_id: profile.id,
+      content: `☎️ Ligação realizada para ${phone}`,
+      contact_type: 'call',
+    });
+    await logLeadActivity({
+      leadId: data.id,
+      userId: profile.id,
+      actionType: 'call_made',
+      description: `Ligação realizada para ${phone}`,
+      metadata: { phone },
+    });
+  };
+
   if (guardLoading) {
     return (
       <DashboardLayout>
@@ -257,6 +278,7 @@ export default function Prospeccao() {
                       alreadyImported={alreadyImported}
                       onStartEmailFlow={alreadyImported ? handleStartEmailFlow : undefined}
                       onSendWhatsApp={alreadyImported ? handleSendWhatsApp : undefined}
+                      onCallMade={alreadyImported ? handleCallMade : undefined}
                     />
                   </Card>
                 </div>

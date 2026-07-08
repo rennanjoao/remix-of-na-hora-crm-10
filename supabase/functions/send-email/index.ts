@@ -85,6 +85,28 @@ Deno.serve(async (req) => {
       })
       .eq('id', sendRecord.id);
 
+    if (lead_id && sdr_id) {
+      const { error: activityError } = await supabase
+        .from('lead_activities')
+        .insert({
+          lead_id,
+          user_id: sdr_id,
+          action_type: 'email_sent',
+          description: `E-mail enviado para ${to_email}: ${subject}`,
+          metadata: {
+            send_id: sendRecord.id,
+            campaign_id,
+            step_id,
+            to_email,
+            subject,
+          },
+        });
+
+      if (activityError) {
+        console.warn('Lead activity email_sent insert failed:', activityError);
+      }
+    }
+
     return new Response(JSON.stringify({ success: true, send_id: sendRecord.id }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
