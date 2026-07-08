@@ -15,6 +15,7 @@ import { ConsultaHistoryTable } from '@/components/prospeccao/ConsultaHistoryTab
 import { PlacesSearchMode } from '@/components/prospeccao/PlacesSearchMode';
 import { ProspeccaoStatusBar } from '@/components/prospeccao/ProspeccaoStatusBar';
 import { ReactivationList } from '@/components/prospeccao/ReactivationList';
+import { getDefaultScript, interpolateScript } from '@/lib/approach-scripts';
 
 interface Consulta {
   id: string;
