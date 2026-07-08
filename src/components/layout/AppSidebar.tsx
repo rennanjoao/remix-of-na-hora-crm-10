@@ -1,16 +1,17 @@
-import { 
-  LayoutDashboard, 
-  Users, 
-  Search, 
-  Calendar, 
-  UserCog, 
+import {
+  LayoutDashboard,
+  Users,
+  Search,
+  Calendar,
+  UserCog,
   LogOut,
   Truck,
   Target,
   ChevronRight,
   Video,
   Mail,
-  Radio
+  Radio,
+  Activity,
 } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -46,6 +47,7 @@ const navItems: NavItem[] = [
   { title: 'Automação', url: '/automacao', icon: Mail, roles: ['admin', 'sdr'] },
   { title: 'Calendário', url: '/calendario', icon: Calendar, roles: ['admin', 'sdr', 'gerente'] },
   { title: 'Command Center', url: '/command-center', icon: Radio, roles: ['admin', 'gerente'] },
+  { title: 'Auditoria SDR', url: '/auditoria-sdr', icon: Activity, roles: ['admin', 'gerente'] },
   { title: 'Administração', url: '/admin', icon: UserCog, roles: ['admin'] },
 ];
 

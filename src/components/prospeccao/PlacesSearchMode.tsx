@@ -13,13 +13,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import {
   Loader2, Search, MapPin, Star, Phone, Globe, Download, MessageCircle,
   ExternalLink, Sparkles, Flag, Building2, LayoutGrid, List as ListIcon,
-  Mail, Copy, Check, Users,
+  Mail, Copy, Check, Users, Send, CheckSquare, Square,
 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { enrollLeadInCampaign } from '@/lib/campaign-enroll';
 import { getDefaultScript, interpolateScript } from '@/lib/approach-scripts';
 import { logLeadActivity } from '@/lib/lead-activities';
 import { ScheduleMeetingModal } from '@/components/ScheduleMeetingModal';
+import { BulkEmailModal, type BulkEmailTarget } from './BulkEmailModal';
+import { FacadeImageGrid } from './FacadeImageGrid';
 
 interface PlaceItem {
   place_id: string;
@@ -137,6 +140,8 @@ export function PlacesSearchMode() {
   const [scheduleFor, setScheduleFor] = useState<{ id: string; razao_social: string; nome_fantasia: string | null; email: string | null; telefone: string | null } | null>(null);
   const [leadInfoByPlace, setLeadInfoByPlace] = useState<Map<string, { status: string; contact_outcome: string | null }>>(new Map());
   const [statusTab, setStatusTab] = useState<'todos' | 'novos' | 'trabalhados'>('todos');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
   const scrapedRequested = useRef<Set<string>>(new Set());
 
   // Hydrate imported/outcome info from DB whenever results change
@@ -516,7 +521,12 @@ export function PlacesSearchMode() {
       <Card key={item.place_id} className="overflow-hidden">
         <CardContent className="p-3">
           <div className="flex gap-3">
-            <div className="shrink-0">
+            <div className="shrink-0 flex flex-col items-center gap-2">
+              <Checkbox
+                checked={selectedIds.has(item.place_id)}
+                onCheckedChange={() => toggleSelect(item.place_id)}
+                aria-label="Selecionar"
+              />
               {thumb ? (
                 <img src={thumb} alt={item.display_name || ''} loading="lazy"
                   className="w-24 h-24 object-cover rounded-md border border-border bg-muted"
@@ -595,7 +605,10 @@ export function PlacesSearchMode() {
     const alreadyImported = importedIds.has(item.place_id);
     const isImporting = importingId === item.place_id;
     return (
-      <TableRow key={item.place_id}>
+      <TableRow key={item.place_id} data-state={selectedIds.has(item.place_id) ? 'selected' : undefined}>
+        <TableCell className="w-8">
+          <Checkbox checked={selectedIds.has(item.place_id)} onCheckedChange={() => toggleSelect(item.place_id)} aria-label="Selecionar" />
+        </TableCell>
         <TableCell className="font-medium max-w-[240px] truncate">{item.display_name}</TableCell>
         <TableCell className="text-xs text-muted-foreground max-w-[280px] truncate">{item.formatted_address}</TableCell>
         <TableCell className="text-xs">
@@ -624,6 +637,39 @@ export function PlacesSearchMode() {
   };
 
   const notImportedCount = visibleResults.filter(r => !importedIds.has(r.place_id)).length;
+
+  const toggleSelect = (id: string) => setSelectedIds(prev => {
+    const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n;
+  });
+  const selectAllVisible = () => {
+    const allSelected = visibleResults.every(r => selectedIds.has(r.place_id));
+    setSelectedIds(prev => {
+      const n = new Set(prev);
+      if (allSelected) visibleResults.forEach(r => n.delete(r.place_id));
+      else visibleResults.forEach(r => n.add(r.place_id));
+      return n;
+    });
+  };
+  const selectedItems = useMemo(
+    () => results.filter(r => selectedIds.has(r.place_id)),
+    [results, selectedIds],
+  );
+  const buildBulkTargets = (): BulkEmailTarget[] => selectedItems.map(item => ({
+    place_id: item.place_id,
+    display_name: item.display_name,
+    email: emailOverrides.get(item.place_id) ?? scrapedEmails.get(item.place_id)?.[0]?.email ?? null,
+    lead_id: leadIdByPlace.get(item.place_id) ?? null,
+    photo_name: item.photos[0]?.name ?? null,
+    fallback_url: logoFromWebsite(item.website),
+  }));
+  const ensureLeadForBulk = async (place_id: string): Promise<string | null> => {
+    const item = results.find(r => r.place_id === place_id);
+    if (!item) return null;
+    const existing = leadIdByPlace.get(place_id);
+    if (existing) return existing;
+    return await handleImport(item, { silent: true });
+  };
+
 
   return (
     <div className="space-y-4">
@@ -708,6 +754,37 @@ export function PlacesSearchMode() {
             </div>
           </div>
 
+          {selectedIds.size > 0 && (
+            <Card className="border-primary/40 bg-primary/5">
+              <CardContent className="p-3 space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 text-sm">
+                    <CheckSquare className="h-4 w-4 text-primary" />
+                    <span className="font-medium">{selectedIds.size} selecionados</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>Limpar</Button>
+                    <Button size="sm" variant="outline" onClick={selectAllVisible}>
+                      {visibleResults.every(r => selectedIds.has(r.place_id)) ? <><Square className="h-3.5 w-3.5 mr-1" />Desmarcar visíveis</> : <><CheckSquare className="h-3.5 w-3.5 mr-1" />Selecionar visíveis</>}
+                    </Button>
+                    <Button size="sm" onClick={() => setBulkOpen(true)}>
+                      <Send className="h-3.5 w-3.5 mr-1" />Ações em Massa
+                    </Button>
+                  </div>
+                </div>
+                <FacadeImageGrid
+                  items={selectedItems.map(item => ({
+                    place_id: item.place_id,
+                    display_name: item.display_name,
+                    photo_name: item.photos[0]?.name ?? null,
+                    fallback_url: logoFromWebsite(item.website),
+                  }))}
+                  onRemove={toggleSelect}
+                />
+              </CardContent>
+            </Card>
+          )}
+
           {viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{visibleResults.map(renderCard)}</div>
           ) : (
@@ -715,6 +792,13 @@ export function PlacesSearchMode() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-8">
+                      <Checkbox
+                        checked={visibleResults.length > 0 && visibleResults.every(r => selectedIds.has(r.place_id))}
+                        onCheckedChange={selectAllVisible}
+                        aria-label="Selecionar todos"
+                      />
+                    </TableHead>
                     <TableHead>Empresa</TableHead>
                     <TableHead>Endereço</TableHead>
                     <TableHead>Telefone</TableHead>
@@ -745,6 +829,13 @@ export function PlacesSearchMode() {
         open={!!scheduleFor}
         onOpenChange={(open) => !open && setScheduleFor(null)}
         lead={scheduleFor}
+      />
+
+      <BulkEmailModal
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        targets={buildBulkTargets()}
+        onEnsureLead={ensureLeadForBulk}
       />
     </div>
   );
