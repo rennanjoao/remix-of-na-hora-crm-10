@@ -174,7 +174,15 @@ export default function CommandCenter() {
       </DashboardLayout>
     );
   }
-  if (!isAllowed) return null;
+  if (!isAllowed) {
+    return (
+      <DashboardLayout>
+        <div className="flex h-[50vh] items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   const Feed = ({ dense = false }: { dense?: boolean }) => (
     <ScrollArea className={cn('h-full', dense ? '' : '')}>
