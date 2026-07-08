@@ -138,6 +138,14 @@ export default function Prospeccao() {
       if (error) throw error;
 
       await supabase.from('cnpj_consultas').update({ importado: true, lead_id: newLead.id }).eq('cnpj', cnpjClean).eq('consultado_por', profile.id);
+      await logLeadActivity({
+        leadId: newLead.id,
+        userId: profile.id,
+        actionType: 'lead_created',
+        description: `Lead criado a partir de consulta CNPJ (${company.razao_social})`,
+        newStatus: 'novo',
+        metadata: { cnpj: cnpjClean, fonte: 'Brasil API' },
+      });
       toast.success('Empresa importada para o CRM!');
       setAlreadyImported(true);
       loadConsultas();
