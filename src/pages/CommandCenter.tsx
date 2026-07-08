@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Activity, Maximize2, Minimize2, UserPlus, Mail, Video, Target, Radio } from 'lucide-react';
+import { Loader2, Activity, Maximize2, Minimize2, UserPlus, Mail, Video, Target, Radio, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type EventKind = 'lead_novo' | 'lead_status' | 'timeline' | 'email' | 'meeting';
@@ -21,6 +21,11 @@ interface FeedEvent {
   at: string; // ISO
 }
 
+interface LeadRow { id: string; company_name?: string | null; city?: string | null; category?: string | null; assigned_to?: string | null; created_by?: string | null; status?: string | null; contact_outcome?: string | null; created_at?: string | null; }
+interface LeadTimelineRow { id: string; contact_type?: string | null; notes?: string | null; description?: string | null; created_at?: string | null; }
+interface EmailSendRow { id: string; subject?: string | null; recipient_email?: string | null; sdr_id?: string | null; created_at?: string | null; }
+interface MeetingRow { id: string; title?: string | null; start_time?: string | null; sdr_id?: string | null; created_at?: string | null; }
+
 interface SdrPerfRow {
   sdr_id: string;
   full_name: string;
@@ -31,7 +36,7 @@ interface SdrPerfRow {
   emails_enviados: number;
 }
 
-const KIND_META: Record<EventKind, { label: string; icon: any; className: string }> = {
+const KIND_META: Record<EventKind, { label: string; icon: LucideIcon; className: string }> = {
   lead_novo:   { label: 'Novo lead',        icon: UserPlus, className: 'bg-blue-500/10 text-blue-600' },
   lead_status: { label: 'Status alterado',  icon: Target,   className: 'bg-purple-500/10 text-purple-600' },
   timeline:    { label: 'Interação',        icon: Activity, className: 'bg-teal-500/10 text-teal-600' },
@@ -70,7 +75,7 @@ export default function CommandCenter() {
 
   const fetchPerf = async () => {
     setLoadingPerf(true);
-    const { data, error } = await (supabase as any).rpc('get_sdr_performance', { _days: 1 });
+    const { data, error } = await supabase.rpc('get_sdr_performance', { _days: 1 });
     if (!error && data) setPerf(data as SdrPerfRow[]);
     setLoadingPerf(false);
   };
@@ -83,7 +88,7 @@ export default function CommandCenter() {
     const channel = supabase
       .channel('command-center')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leads' }, async (payload) => {
-        const row: any = payload.new;
+        const row = payload.new as LeadRow;
         const sdrName = await resolveSdrName(row.assigned_to ?? row.created_by);
         pushEvent({
           id: `lead-${row.id}-${Date.now()}`,
@@ -96,8 +101,8 @@ export default function CommandCenter() {
         fetchPerf();
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'leads' }, async (payload) => {
-        const row: any = payload.new;
-        const old: any = payload.old;
+        const row = payload.new as LeadRow;
+        const old = payload.old as LeadRow;
         if (row.status === old.status && row.contact_outcome === old.contact_outcome) return;
         const sdrName = await resolveSdrName(row.assigned_to);
         pushEvent({
@@ -110,7 +115,7 @@ export default function CommandCenter() {
         });
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'lead_timeline' }, async (payload) => {
-        const row: any = payload.new;
+        const row = payload.new as LeadTimelineRow;
         pushEvent({
           id: `tl-${row.id}`,
           kind: 'timeline',
@@ -120,7 +125,7 @@ export default function CommandCenter() {
         });
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'email_sends' }, async (payload) => {
-        const row: any = payload.new;
+        const row = payload.new as EmailSendRow;
         const sdrName = await resolveSdrName(row.sdr_id);
         pushEvent({
           id: `em-${row.id}`,
@@ -133,7 +138,7 @@ export default function CommandCenter() {
         fetchPerf();
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'meetings' }, async (payload) => {
-        const row: any = payload.new;
+        const row = payload.new as MeetingRow;
         const sdrName = await resolveSdrName(row.sdr_id);
         pushEvent({
           id: `mt-${row.id}`,

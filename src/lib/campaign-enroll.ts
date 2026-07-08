@@ -10,8 +10,8 @@ export async function enrollLeadInCampaign(
   campaignSlug: string,
   sdrId: string,
 ): Promise<{ enrolled: boolean; reason?: string }> {
-  const { data: campaign } = await (supabase
-    .from('email_campaigns') as any)
+  const { data: campaign } = await supabase
+    .from('email_campaigns')
     .select('id, status')
     .eq('slug', campaignSlug)
     .maybeSingle();

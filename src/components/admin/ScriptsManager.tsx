@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import { Loader2, MessageSquareText, Plus, Pencil, Trash2 } from 'lucide-react';
 import { invalidateScriptsCache, type ApproachScript } from '@/lib/approach-scripts';
 
-const scriptsTable = () => (supabase.from('approach_scripts' as never) as any);
+const scriptsTable = () => supabase.from('approach_scripts');
 
 export function ScriptsManager() {
   const [scripts, setScripts] = useState<ApproachScript[]>([]);
@@ -75,8 +75,8 @@ export function ScriptsManager() {
       invalidateScriptsCache();
       setDialogOpen(false);
       load();
-    } catch (err: any) {
-      toast.error(err?.message || 'Erro ao salvar');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao salvar');
     } finally {
       setSaving(false);
     }

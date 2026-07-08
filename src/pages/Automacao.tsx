@@ -90,16 +90,23 @@ export default function Automacao() {
         .order('created_at', { ascending: false });
       if (error) throw error;
       setCampaigns(data || []);
-    } catch (error) {
-      console.error('Error:', error);
+    } catch (e) {
+      console.error('Error fetching campaigns:', e);
+      toast.error('Erro ao carregar campanhas', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
     } finally {
       setLoading(false);
     }
   };
 
   const fetchLeads = async () => {
-    const { data } = await supabase.from('leads').select('id, razao_social, nome_fantasia, email');
-    setLeads(data || []);
+    try {
+      const { data, error } = await supabase.from('leads').select('id, razao_social, nome_fantasia, email');
+      if (error) throw error;
+      setLeads(data || []);
+    } catch (e) {
+      console.error('Error fetching leads:', e);
+      toast.error('Erro ao carregar leads', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
+    }
   };
 
   useEffect(() => {
@@ -114,7 +121,7 @@ export default function Automacao() {
         name: newCampaign.name,
         description: newCampaign.description || null,
         created_by: profile.id,
-      } as any);
+      });
       if (error) throw error;
       toast.success('Campanha criada!');
       setCreateOpen(false);
@@ -135,8 +142,9 @@ export default function Automacao() {
       ]);
       setSteps((stepsRes.data as EmailStep[]) || []);
       setSends((sendsRes.data as EmailSend[]) || []);
-    } catch (error) {
-      console.error('Error:', error);
+    } catch (e) {
+      console.error('Error loading campaign details:', e);
+      toast.error('Erro ao carregar detalhes da campanha', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
     }
   };
 
@@ -152,7 +160,7 @@ export default function Automacao() {
         delay_days: newStep.delay_days,
         step_type: newStep.step_type,
         condition_type: newStep.condition_type || null,
-      } as any);
+      });
       if (error) throw error;
       toast.success('Etapa adicionada!');
       setAddStepOpen(false);
@@ -171,8 +179,9 @@ export default function Automacao() {
       setCampaigns(prev => prev.filter(c => c.id !== id));
       if (selectedCampaign?.id === id) setSelectedCampaign(null);
       toast.success('Campanha removida');
-    } catch (error) {
-      toast.error('Erro ao deletar campanha');
+    } catch (e) {
+      console.error('Error deleting campaign:', e);
+      toast.error('Erro ao deletar campanha', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
     }
   };
 
@@ -186,8 +195,9 @@ export default function Automacao() {
       if (error) throw error;
       setCampaigns(prev => prev.map(c => c.id === campaign.id ? { ...c, status: newStatus } : c));
       toast.success(`Campanha ${newStatus === 'ativa' ? 'ativada' : 'pausada'}`);
-    } catch (error) {
-      toast.error('Erro ao atualizar status');
+    } catch (e) {
+      console.error('Error toggling campaign status:', e);
+      toast.error('Erro ao atualizar status', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
     }
   };
 

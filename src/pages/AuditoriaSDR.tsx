@@ -4,7 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Phone, Mail, MessageCircle, Download, Flag, Activity } from 'lucide-react';
+import { Phone, Mail, MessageCircle, Download, Flag, Activity, type LucideIcon } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
@@ -43,48 +44,59 @@ export default function AuditoriaSDR() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from('profiles').select('id, full_name, email').eq('is_active', true);
-      setSdrs((data ?? []) as Profile[]);
+      try {
+        const { data, error } = await supabase.from('profiles').select('id, full_name, email').eq('is_active', true);
+        if (error) throw error;
+        setSdrs((data ?? []) as Profile[]);
+      } catch (e) {
+        console.error('Error fetching SDRs:', e);
+        toast.error('Erro ao carregar dados', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
+      }
     })();
   }, []);
 
   useEffect(() => {
     (async () => {
-      let q = (supabase.from('lead_activities') as any)
-        .select('action_type, created_at, user_id')
-        .gte('created_at', since.toISOString())
-        .limit(10000);
-      if (sdrId !== 'all') q = q.eq('user_id', sdrId);
-      const { data, error } = await q;
-      if (error) { console.error(error); return; }
-      const rows = (data ?? []) as { action_type: string; created_at: string }[];
+      try {
+        let q = supabase.from('lead_activities')
+          .select('action_type, created_at, user_id')
+          .gte('created_at', since.toISOString())
+          .limit(10000);
+        if (sdrId !== 'all') q = q.eq('user_id', sdrId);
+        const { data, error } = await q;
+        if (error) throw error;
+        const rows = (data ?? []) as { action_type: string; created_at: string }[];
 
-      const today = new Date();
-      const isToday = (iso: string) => new Date(iso).toDateString() === today.toDateString();
-      const todayRows = rows.filter(r => isToday(r.created_at));
-      const kCount = (t: string) => todayRows.filter(r => r.action_type === t).length;
-      setKpis({
-        call_made: kCount('call_made'),
-        email_sent: kCount('email_sent'),
-        whatsapp_sent: kCount('whatsapp_sent'),
-        lead_imported: kCount('lead_imported'),
-        status_change: kCount('status_change'),
-        total: todayRows.length,
-      });
+        const today = new Date();
+        const isToday = (iso: string) => new Date(iso).toDateString() === today.toDateString();
+        const todayRows = rows.filter(r => isToday(r.created_at));
+        const kCount = (t: string) => todayRows.filter(r => r.action_type === t).length;
+        setKpis({
+          call_made: kCount('call_made'),
+          email_sent: kCount('email_sent'),
+          whatsapp_sent: kCount('whatsapp_sent'),
+          lead_imported: kCount('lead_imported'),
+          status_change: kCount('status_change'),
+          total: todayRows.length,
+        });
 
-      const byDay = new Map<string, DayCount>();
-      for (let i = 0; i < days; i++) {
-        const d = startOfDay(subDays(new Date(), days - 1 - i));
-        const key = format(d, 'yyyy-MM-dd');
-        byDay.set(key, { day: format(d, 'dd/MM', { locale: ptBR }), call_made: 0, email_sent: 0, whatsapp_sent: 0, lead_imported: 0, status_change: 0 });
+        const byDay = new Map<string, DayCount>();
+        for (let i = 0; i < days; i++) {
+          const d = startOfDay(subDays(new Date(), days - 1 - i));
+          const key = format(d, 'yyyy-MM-dd');
+          byDay.set(key, { day: format(d, 'dd/MM', { locale: ptBR }), call_made: 0, email_sent: 0, whatsapp_sent: 0, lead_imported: 0, status_change: 0 });
+        }
+        for (const r of rows) {
+          const key = format(new Date(r.created_at), 'yyyy-MM-dd');
+          const bucket = byDay.get(key);
+          if (!bucket) continue;
+          if (r.action_type in bucket) (bucket as Record<string, number | string>)[r.action_type] = ((bucket as Record<string, number | string>)[r.action_type] as number) + 1;
+        }
+        setSeries(Array.from(byDay.values()));
+      } catch (e) {
+        console.error('Error fetching activities:', e);
+        toast.error('Erro ao carregar dados', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
       }
-      for (const r of rows) {
-        const key = format(new Date(r.created_at), 'yyyy-MM-dd');
-        const bucket = byDay.get(key);
-        if (!bucket) continue;
-        if (r.action_type in bucket) (bucket as any)[r.action_type]++;
-      }
-      setSeries(Array.from(byDay.values()));
     })();
   }, [sdrId, since, days]);
 
@@ -167,7 +179,7 @@ export default function AuditoriaSDR() {
   );
 }
 
-function KpiCard({ label, value, icon: Icon }: { label: string; value: number; icon: any }) {
+function KpiCard({ label, value, icon: Icon }: { label: string; value: number; icon: LucideIcon }) {
   return (
     <Card>
       <CardContent className="p-3 flex items-center justify-between">

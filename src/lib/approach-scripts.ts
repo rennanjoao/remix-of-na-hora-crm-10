@@ -36,7 +36,7 @@ const TTL_MS = 60_000;
 
 async function loadScripts(): Promise<ApproachScript[]> {
   if (cache && Date.now() - cache.at < TTL_MS) return cache.scripts;
-  const { data } = await (supabase.from('approach_scripts' as never) as any)
+  const { data } = await supabase.from('approach_scripts')
     .select('*')
     .order('is_default', { ascending: false })
     .order('created_at', { ascending: true });

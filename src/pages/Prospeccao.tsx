@@ -165,8 +165,8 @@ export default function Prospeccao() {
     const phone = normalizePhone(company.ddd_telefone_1 || company.ddd_telefone_2);
     if (!phone) return;
     const nome = company.nome_fantasia || company.razao_social;
-    const cidade = (company as any).municipio || '';
-    const segmento = (company as any).cnae_fiscal_descricao || '';
+    const cidade = company.municipio || '';
+    const segmento = company.cnae_fiscal_descricao || '';
     let body: string;
     try {
       const script = await getDefaultScript('whatsapp');

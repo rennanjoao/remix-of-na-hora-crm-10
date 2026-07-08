@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
-  Activity, Phone, Mail, MessageCircle, Eye, Edit3, Flag, UserPlus, Download, CalendarPlus, Sparkles, Loader2,
+  Activity, Phone, Mail, MessageCircle, Eye, Edit3, Flag, UserPlus, Download, CalendarPlus, Sparkles, Loader2, type LucideIcon,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -16,12 +16,12 @@ interface Activity {
   description: string;
   previous_status: string | null;
   new_status: string | null;
-  metadata: any;
+  metadata: Record<string, unknown> | null;
   created_at: string;
   lead?: { razao_social: string | null; nome_fantasia: string | null } | null;
 }
 
-const ICONS: Record<string, any> = {
+const ICONS: Record<string, LucideIcon> = {
   call_made: Phone,
   email_sent: Mail,
   whatsapp_sent: MessageCircle,
@@ -50,7 +50,7 @@ export function SDRActivityTimeline({ sdrId, since, until, actionType }: Props) 
     let cancelled = false;
     (async () => {
       setLoading(true);
-      let q = (supabase.from('lead_activities') as any)
+      let q = supabase.from('lead_activities')
         .select('*, lead:leads(razao_social, nome_fantasia)')
         .gte('created_at', since.toISOString())
         .order('created_at', { ascending: false })
