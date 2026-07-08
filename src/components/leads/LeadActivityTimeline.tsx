@@ -69,6 +69,7 @@ interface Props { leadId: string }
 export function LeadActivityTimeline({ leadId }: Props) {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  const sortedRows = useMemo(() => sortActivities(rows), [rows]);
 
   useEffect(() => {
     let active = true;
@@ -111,8 +112,6 @@ export function LeadActivityTimeline({ leadId }: Props) {
   if (rows.length === 0) {
     return <p className="text-xs text-muted-foreground text-center py-6">Sem atividades registradas para este lead.</p>;
   }
-
-  const sortedRows = useMemo(() => sortActivities(rows), [rows]);
 
   return (
     <div className="relative pl-6">
