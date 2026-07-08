@@ -630,6 +630,39 @@ export function PlacesSearchMode() {
 
   const notImportedCount = visibleResults.filter(r => !importedIds.has(r.place_id)).length;
 
+  const toggleSelect = (id: string) => setSelectedIds(prev => {
+    const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n;
+  });
+  const selectAllVisible = () => {
+    const allSelected = visibleResults.every(r => selectedIds.has(r.place_id));
+    setSelectedIds(prev => {
+      const n = new Set(prev);
+      if (allSelected) visibleResults.forEach(r => n.delete(r.place_id));
+      else visibleResults.forEach(r => n.add(r.place_id));
+      return n;
+    });
+  };
+  const selectedItems = useMemo(
+    () => results.filter(r => selectedIds.has(r.place_id)),
+    [results, selectedIds],
+  );
+  const buildBulkTargets = (): BulkEmailTarget[] => selectedItems.map(item => ({
+    place_id: item.place_id,
+    display_name: item.display_name,
+    email: emailOverrides.get(item.place_id) ?? scrapedEmails.get(item.place_id)?.[0]?.email ?? null,
+    lead_id: leadIdByPlace.get(item.place_id) ?? null,
+    photo_name: item.photos[0]?.name ?? null,
+    fallback_url: logoFromWebsite(item.website),
+  }));
+  const ensureLeadForBulk = async (place_id: string): Promise<string | null> => {
+    const item = results.find(r => r.place_id === place_id);
+    if (!item) return null;
+    const existing = leadIdByPlace.get(place_id);
+    if (existing) return existing;
+    return await handleImport(item, { silent: true });
+  };
+
+
   return (
     <div className="space-y-4">
       <Card>
