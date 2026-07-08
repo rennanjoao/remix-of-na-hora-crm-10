@@ -320,6 +320,7 @@ export function PlacesSearchMode() {
 
       const { error } = await supabase.from('leads').update(patch as never).eq('id', leadId);
       if (error) throw error;
+      const prevInfo = leadInfoByPlace.get(item.place_id);
       setLeadInfoByPlace(prev => new Map(prev).set(item.place_id, { status: outcome.status, contact_outcome: outcome.id }));
 
       await supabase.from('lead_timeline').insert({
@@ -327,6 +328,15 @@ export function PlacesSearchMode() {
         author_id: profile.id,
         content: `🎯 Resultado do contato: ${outcome.label}`,
         contact_type: 'outcome',
+      });
+      await logLeadActivity({
+        leadId,
+        userId: profile.id,
+        actionType: 'status_change',
+        description: `Outcome: ${outcome.label}`,
+        previousStatus: prevInfo?.status ?? null,
+        newStatus: outcome.status,
+        metadata: { outcome_id: outcome.id },
       });
 
       // Cadence triggers
