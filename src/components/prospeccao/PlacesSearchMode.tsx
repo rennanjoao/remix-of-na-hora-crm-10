@@ -140,6 +140,8 @@ export function PlacesSearchMode() {
   const [scheduleFor, setScheduleFor] = useState<{ id: string; razao_social: string; nome_fantasia: string | null; email: string | null; telefone: string | null } | null>(null);
   const [leadInfoByPlace, setLeadInfoByPlace] = useState<Map<string, { status: string; contact_outcome: string | null }>>(new Map());
   const [statusTab, setStatusTab] = useState<'todos' | 'novos' | 'trabalhados'>('todos');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
   const scrapedRequested = useRef<Set<string>>(new Set());
 
   // Hydrate imported/outcome info from DB whenever results change
