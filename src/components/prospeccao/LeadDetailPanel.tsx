@@ -63,8 +63,15 @@ export function LeadDetailPanel({ company, onImport, importing, alreadyImported,
     <div className="h-full flex flex-col gap-4 p-4 overflow-y-auto">
       {/* Header */}
       <div className="space-y-2">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+        <div className="flex items-start gap-3">
+          <PlaceFacadeDialog
+            cnpj={company.cnpj}
+            razaoSocial={company.razao_social}
+            nomeFantasia={company.nome_fantasia}
+            municipio={company.municipio}
+            uf={company.uf}
+          />
+          <div className="min-w-0 flex-1">
             <h2 className="font-display text-base font-bold leading-tight truncate">
               {company.nome_fantasia || company.razao_social}
             </h2>
@@ -72,6 +79,16 @@ export function LeadDetailPanel({ company, onImport, importing, alreadyImported,
               <p className="text-xs text-muted-foreground truncate">{company.razao_social}</p>
             )}
           </div>
+          <div className="flex flex-col gap-1 shrink-0">
+            <Badge className={config.color + ' text-xs'}>{config.label}</Badge>
+            {altoPotencial && (
+              <Badge variant="default" className="gap-1 text-xs">
+                <Truck className="h-3 w-3" />
+                Alto Potencial
+              </Badge>
+            )}
+          </div>
+        </div>
           <div className="flex flex-col gap-1 shrink-0">
             <Badge className={config.color + ' text-xs'}>{config.label}</Badge>
             {altoPotencial && (
