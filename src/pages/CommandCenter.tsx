@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { TeamActivityFeed } from '@/components/leads/TeamActivityFeed';
 import { useRoleGuard } from '@/hooks/useRoleGuard';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
