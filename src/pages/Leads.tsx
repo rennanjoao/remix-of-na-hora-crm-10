@@ -17,7 +17,7 @@ import { logLeadActivity } from '@/lib/lead-activities';
 import { LeadActivityTimeline } from '@/components/leads/LeadActivityTimeline';
 import {
   Loader2, Download, MoreVertical, Trash2, RotateCcw, Save, MessageSquare, Phone, Mail,
-  Building2, MapPin, Video, Plus, Trash, Filter, X,
+  Building2, MapPin, Video, Plus, Trash, Filter, X, Activity,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
