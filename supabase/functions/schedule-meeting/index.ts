@@ -84,7 +84,11 @@ async function createGoogleMeet(
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const auth = await requireAuthenticatedUser(req, corsHeaders);
+  if (!auth.ok) return auth.response!;
 
   try {
     const payload = (await req.json()) as Payload;
