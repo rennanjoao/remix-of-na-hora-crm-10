@@ -426,6 +426,33 @@ export function PlacesSearchMode() {
     }
   };
 
+  const recordCall = async (item: PlaceItem) => {
+    if (!profile) return;
+    const phone = normalizePhone(item.phone);
+    if (!phone) return;
+
+    const leadId = leadIdByPlace.get(item.place_id) || (await (async () => {
+      const { data } = await supabase.from('leads').select('id').eq('place_id', item.place_id).maybeSingle();
+      return data?.id ?? null;
+    })());
+
+    if (!leadId) return;
+
+    await supabase.from('lead_timeline').insert({
+      lead_id: leadId,
+      author_id: profile.id,
+      content: `☎️ Ligação realizada para ${phone}`,
+      contact_type: 'call',
+    });
+    await logLeadActivity({
+      leadId,
+      userId: profile.id,
+      actionType: 'call_made',
+      description: `Ligação realizada para ${phone}`,
+      metadata: { phone },
+    });
+  };
+
   const copyEmail = async (email: string) => {
     try {
       await navigator.clipboard.writeText(email);
@@ -527,7 +554,7 @@ export function PlacesSearchMode() {
               )}
               <div className="flex flex-wrap gap-1.5">
                 {item.phone && (
-                  <a href={`tel:${item.phone}`} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-accent/40 hover:bg-accent transition">
+                  <a href={`tel:${normalizePhone(item.phone) ?? item.phone}`} onClick={() => { void recordCall(item); }} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-accent/40 hover:bg-accent transition">
                     <Phone className="h-3 w-3" />{item.phone}
                   </a>
                 )}
@@ -571,7 +598,13 @@ export function PlacesSearchMode() {
       <TableRow key={item.place_id}>
         <TableCell className="font-medium max-w-[240px] truncate">{item.display_name}</TableCell>
         <TableCell className="text-xs text-muted-foreground max-w-[280px] truncate">{item.formatted_address}</TableCell>
-        <TableCell className="text-xs">{item.phone || '—'}</TableCell>
+        <TableCell className="text-xs">
+          {item.phone ? (
+            <a href={`tel:${normalizePhone(item.phone) ?? item.phone}`} onClick={() => { void recordCall(item); }} className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-accent">
+              <Phone className="h-3 w-3" />{item.phone}
+            </a>
+          ) : '—'}
+        </TableCell>
         <TableCell className="text-xs">
           {item.rating != null ? `${item.rating.toFixed(1)} (${item.rating_count ?? 0})` : '—'}
         </TableCell>

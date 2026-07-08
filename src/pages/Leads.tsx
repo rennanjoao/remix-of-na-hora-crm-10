@@ -269,6 +269,24 @@ export default function Leads() {
     setNewNote(''); fetchTimeline(selectedLead.id); toast.success('Nota adicionada');
   };
 
+  const recordCallLead = async (lead: LeadExt) => {
+    if (!profile || !lead.telefone) return;
+    await supabase.from('lead_timeline').insert({
+      lead_id: lead.id,
+      author_id: profile.id,
+      content: `☎️ Ligação realizada para ${lead.telefone}`,
+      contact_type: 'call',
+    });
+    await logLeadActivity({
+      leadId: lead.id,
+      userId: profile.id,
+      actionType: 'call_made',
+      description: `Ligação realizada para ${lead.telefone}`,
+      metadata: { phone: lead.telefone },
+    });
+    fetchTimeline(lead.id);
+  };
+
   // Drag & drop handlers
   const onDragStart = (e: React.DragEvent, leadId: string) => {
     setDraggingId(leadId);
@@ -548,6 +566,14 @@ export default function Leads() {
                     <div><p className="text-xs text-muted-foreground">Local</p><p className="text-sm font-medium">{[selectedLead.cidade, selectedLead.estado].filter(Boolean).join('/') || '—'}</p></div>
                   </div>
                 </div>
+
+                {selectedLead.telefone && (
+                  <Button asChild variant="outline" size="sm" className="w-full">
+                    <a href={`tel:${selectedLead.telefone.replace(/\D/g, '') || selectedLead.telefone}`} onClick={() => { void recordCallLead(selectedLead); }}>
+                      <Phone className="h-4 w-4 mr-2" /> Ligar e registrar atividade
+                    </a>
+                  </Button>
+                )}
 
                 {/* Quick edit form */}
                 <div className="space-y-3 rounded-lg border border-border p-3">

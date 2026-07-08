@@ -15,6 +15,7 @@ interface LeadDetailPanelProps {
   alreadyImported: boolean;
   onStartEmailFlow?: () => void;
   onSendWhatsApp?: () => void;
+  onCallMade?: (phone: string) => void | Promise<void>;
 }
 
 function formatCNPJ(cnpj: string): string {
@@ -32,7 +33,7 @@ function isValidEmail(email: string | null): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-export function LeadDetailPanel({ company, onImport, importing, alreadyImported, onStartEmailFlow, onSendWhatsApp }: LeadDetailPanelProps) {
+export function LeadDetailPanel({ company, onImport, importing, alreadyImported, onStartEmailFlow, onSendWhatsApp, onCallMade }: LeadDetailPanelProps) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -198,6 +199,7 @@ export function LeadDetailPanel({ company, onImport, importing, alreadyImported,
         nomeFantasia={company.nome_fantasia}
         municipio={company.municipio}
         uf={company.uf}
+        onCallMade={onCallMade}
       />
 
       <Separator />
