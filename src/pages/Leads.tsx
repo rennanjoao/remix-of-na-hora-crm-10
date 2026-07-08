@@ -245,12 +245,11 @@ export default function Leads() {
           </Button>
         </div>
 
-        <Tabs defaultValue="pipeline" className="space-y-4">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as 'pipeline' | 'descartados')} className="space-y-4">
           <TabsList>
             <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
             <TabsTrigger value="descartados" className="gap-1.5">
               <Trash className="h-3.5 w-3.5" /> Descartados
-              {discardedLeads.length > 0 && <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">{discardedLeads.length}</Badge>}
             </TabsTrigger>
           </TabsList>
 
@@ -342,6 +341,13 @@ export default function Leads() {
                 );
               })}
             </div>
+            {hasMore && tab === 'pipeline' && (
+              <div className="flex justify-center pt-4">
+                <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
+                  {loadingMore ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Carregando...</> : 'Carregar mais resultados'}
+                </Button>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="descartados">
@@ -375,6 +381,13 @@ export default function Leads() {
                 </Card>
               ))}
             </div>
+            {hasMore && tab === 'descartados' && (
+              <div className="flex justify-center pt-4">
+                <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
+                  {loadingMore ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Carregando...</> : 'Carregar mais resultados'}
+                </Button>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
 
