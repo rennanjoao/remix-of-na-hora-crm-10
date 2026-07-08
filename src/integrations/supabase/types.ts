@@ -311,6 +311,64 @@ export type Database = {
           },
         ]
       }
+      lead_activities: {
+        Row: {
+          action_type: string
+          created_at: string
+          description: string
+          id: string
+          lead_id: string
+          metadata: Json | null
+          new_status: string | null
+          previous_status: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          description: string
+          id?: string
+          lead_id: string
+          metadata?: Json | null
+          new_status?: string | null
+          previous_status?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          description?: string
+          id?: string
+          lead_id?: string
+          metadata?: Json | null
+          new_status?: string | null
+          previous_status?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_activities_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_activities_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_activities_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "sdr_performance_daily"
+            referencedColumns: ["sdr_id"]
+          },
+        ]
+      }
       lead_timeline: {
         Row: {
           author_id: string | null
