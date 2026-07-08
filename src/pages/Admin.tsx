@@ -14,6 +14,8 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { Loader2, UserCog, Search, Shield, UserCheck, UserX } from 'lucide-react';
 import { CreateUserDialog } from '@/components/admin/CreateUserDialog';
+import { ScriptsManager } from '@/components/admin/ScriptsManager';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type AppRole = 'admin' | 'sdr' | 'gerente' | 'motorista';
 
