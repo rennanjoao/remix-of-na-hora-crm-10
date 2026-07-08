@@ -481,13 +481,18 @@ export function PlacesSearchMode() {
                   <h3 className="font-semibold text-sm leading-tight truncate">{item.display_name}</h3>
                   {item.category && <p className="text-xs text-muted-foreground truncate">{item.category}</p>}
                 </div>
-                {item.rating != null && (
-                  <Badge variant="outline" className="gap-1 shrink-0 text-xs">
-                    <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
-                    {item.rating.toFixed(1)}
-                    {item.rating_count ? <span className="text-muted-foreground">({item.rating_count})</span> : null}
-                  </Badge>
-                )}
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  {(() => { const b = getStatusBadge(item.place_id); return (
+                    <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-5 ${b.className}`}>{b.label}</Badge>
+                  ); })()}
+                  {item.rating != null && (
+                    <Badge variant="outline" className="gap-1 text-xs">
+                      <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
+                      {item.rating.toFixed(1)}
+                      {item.rating_count ? <span className="text-muted-foreground">({item.rating_count})</span> : null}
+                    </Badge>
+                  )}
+                </div>
               </div>
               {item.formatted_address && (
                 <p className="text-xs text-muted-foreground flex items-start gap-1">
