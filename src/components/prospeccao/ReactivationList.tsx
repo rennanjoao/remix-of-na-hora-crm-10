@@ -62,6 +62,14 @@ export function ReactivationList() {
         content: `♻️ Lead reativado (outcome anterior: ${prev}${lead.loss_reason ? ` — ${lead.loss_reason}` : ''})`,
         contact_type: 'reactivation',
       });
+      await logLeadActivity({
+        leadId: lead.id,
+        userId: profile.id,
+        actionType: 'status_change',
+        description: `Lead reativado (outcome anterior: ${prev})`,
+        previousStatus: 'descartado',
+        newStatus: 'novo',
+      });
 
       toast.success('Lead reaberto — foi para o funil como Novo');
       setLeads(l => l.filter(x => x.id !== lead.id));
