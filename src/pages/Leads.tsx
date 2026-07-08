@@ -103,6 +103,13 @@ export default function Leads() {
   const [pipelineHasMore, setPipelineHasMore] = useState(true);
   const [discardedHasMore, setDiscardedHasMore] = useState(true);
 
+  // Advanced filters
+  const emptyFilters = { minRating: '', uf: '', cidade: '', setor: '', dateFrom: '', dateTo: '' };
+  const [filters, setFilters] = useState(emptyFilters);
+  const [appliedFilters, setAppliedFilters] = useState(emptyFilters);
+  const [showFilters, setShowFilters] = useState(false);
+  const activeFilterCount = Object.values(appliedFilters).filter(v => v && String(v).trim() !== '').length;
+
   // Edit form state
   const [editPhone, setEditPhone] = useState('');
   const [editEmail, setEditEmail] = useState('');
@@ -111,7 +118,7 @@ export default function Leads() {
 
   const activeStatuses: LeadStatus[] = ['novo', 'contato', 'qualificado', 'proposta', 'negociacao'];
 
-  const fetchLeadsPage = async (which: 'pipeline' | 'descartados', page: number, append: boolean) => {
+  const fetchLeadsPage = async (which: 'pipeline' | 'descartados', page: number, append: boolean, f = appliedFilters) => {
     append ? setLoadingMore(true) : setLoading(true);
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
@@ -119,6 +126,12 @@ export default function Leads() {
     query = which === 'descartados'
       ? query.eq('status', 'perdido')
       : query.in('status', activeStatuses);
+    if (f.minRating && !Number.isNaN(Number(f.minRating))) query = query.gte('rating', Number(f.minRating));
+    if (f.uf.trim()) query = query.ilike('estado', f.uf.trim());
+    if (f.cidade.trim()) query = query.ilike('cidade', `%${f.cidade.trim()}%`);
+    if (f.setor.trim()) query = query.ilike('setor', `%${f.setor.trim()}%`);
+    if (f.dateFrom) query = query.gte('created_at', f.dateFrom);
+    if (f.dateTo) query = query.lte('created_at', `${f.dateTo}T23:59:59`);
     const { data, error } = await query;
     if (error) { toast.error('Erro ao carregar leads'); }
     else {
@@ -129,6 +142,18 @@ export default function Leads() {
       else setDiscardedHasMore(hasMore);
     }
     setLoading(false); setLoadingMore(false);
+  };
+
+  const applyFilters = () => {
+    setAppliedFilters(filters);
+    setPipelinePage(0); setDiscardedPage(0);
+    fetchLeadsPage(tab, 0, false, filters);
+  };
+  const clearFilters = () => {
+    setFilters(emptyFilters);
+    setAppliedFilters(emptyFilters);
+    setPipelinePage(0); setDiscardedPage(0);
+    fetchLeadsPage(tab, 0, false, emptyFilters);
   };
 
   const fetchTimeline = async (leadId: string) => {
