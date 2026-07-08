@@ -90,7 +90,8 @@ export default function AuditoriaSDR() {
           const key = format(new Date(r.created_at), 'yyyy-MM-dd');
           const bucket = byDay.get(key);
           if (!bucket) continue;
-          if (r.action_type in bucket) (bucket as Record<string, number | string>)[r.action_type] = ((bucket as Record<string, number | string>)[r.action_type] as number) + 1;
+          const b = bucket as unknown as Record<string, number | string>;
+          if (r.action_type in b) b[r.action_type] = (b[r.action_type] as number) + 1;
         }
         setSeries(Array.from(byDay.values()));
       } catch (e) {
