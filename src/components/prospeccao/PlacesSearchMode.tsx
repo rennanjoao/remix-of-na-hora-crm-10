@@ -830,6 +830,13 @@ export function PlacesSearchMode() {
         onOpenChange={(open) => !open && setScheduleFor(null)}
         lead={scheduleFor}
       />
+
+      <BulkEmailModal
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        targets={buildBulkTargets()}
+        onEnsureLead={ensureLeadForBulk}
+      />
     </div>
   );
 }
