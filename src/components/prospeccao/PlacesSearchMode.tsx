@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { enrollLeadInCampaign } from '@/lib/campaign-enroll';
+import { getDefaultScript, interpolateScript } from '@/lib/approach-scripts';
 import { ScheduleMeetingModal } from '@/components/ScheduleMeetingModal';
 
 interface PlaceItem {
@@ -291,6 +292,10 @@ export function PlacesSearchMode() {
       } else if (outcome.id === 'sem_resposta') {
         const r = await enrollLeadInCampaign(leadId, 'recaptura-pos-silencio', profile.id);
         if (r.enrolled) toast.success('Cadência "Recaptura" iniciada');
+      } else if (outcome.id === 'frota_propria') {
+        const r = await enrollLeadInCampaign(leadId, 'objeccao-frota-propria', profile.id);
+        if (r.enrolled) toast.success('Cadência "Objeção frota própria" iniciada (retorno em ~45 dias)');
+        else if (r.reason && r.reason !== 'Already enrolled') console.warn('enroll skipped:', r.reason);
       }
 
       if (outcome.is_suppressed) {
@@ -318,13 +323,23 @@ export function PlacesSearchMode() {
     if (!profile) return;
     const phone = normalizePhone(item.phone);
     if (!phone) return;
-    const seg = item.category ? ` do segmento ${item.category.toLowerCase()}` : '';
-    const loc = item.city ? ` em ${item.city}` : '';
+
     const nome = item.display_name || 'sua empresa';
-    const msg = encodeURIComponent(
-      `Olá! Sou da Na Hora Transporte. Trabalhamos com transporte rodoviário 100% dedicado e vi que a ${nome}${seg}${loc} pode ter demanda logística — gostaria de trocar uma ideia rápida?`,
-    );
-    window.open(`https://wa.me/55${phone}?text=${msg}`, '_blank', 'noopener,noreferrer');
+    const cidade = item.city || '';
+    const segmento = item.category ? item.category.toLowerCase() : '';
+
+    // Busca script default; fallback = texto antigo hardcoded (não pode quebrar se tabela vazia)
+    let body: string;
+    try {
+      const script = await getDefaultScript('whatsapp');
+      body = script
+        ? interpolateScript(script.body, { nome, cidade, segmento })
+        : `Olá! Sou da Na Hora Transporte. Trabalhamos com transporte rodoviário 100% dedicado e vi que a ${nome}${segmento ? ` do segmento ${segmento}` : ''}${cidade ? ` em ${cidade}` : ''} pode ter demanda logística — gostaria de trocar uma ideia rápida?`;
+    } catch {
+      body = `Olá! Sou da Na Hora Transporte. Trabalhamos com transporte rodoviário 100% dedicado e vi que a ${nome} pode ter demanda logística — gostaria de trocar uma ideia rápida?`;
+    }
+
+    window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(body)}`, '_blank', 'noopener,noreferrer');
 
     // Log timeline (best-effort, no-op if lead not yet imported)
     const leadId = leadIdByPlace.get(item.place_id) || (await (async () => {

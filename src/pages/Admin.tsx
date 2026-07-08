@@ -14,6 +14,8 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { Loader2, UserCog, Search, Shield, UserCheck, UserX } from 'lucide-react';
 import { CreateUserDialog } from '@/components/admin/CreateUserDialog';
+import { ScriptsManager } from '@/components/admin/ScriptsManager';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type AppRole = 'admin' | 'sdr' | 'gerente' | 'motorista';
 
@@ -161,6 +163,13 @@ export default function Admin() {
           </div>
         </div>
 
+        <Tabs defaultValue="users" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="users">Usuários</TabsTrigger>
+            <TabsTrigger value="scripts">Scripts de Abordagem</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="users">
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -292,6 +301,12 @@ export default function Admin() {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="scripts">
+            <ScriptsManager />
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );

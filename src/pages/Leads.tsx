@@ -81,10 +81,15 @@ function downloadCSV(filename: string, content: string) {
   document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
+const PAGE_SIZE = 50;
+const LEAD_COLS =
+  'id,cnpj,razao_social,nome_fantasia,telefone,email,cidade,estado,setor,status,created_at,updated_at,foto_url,loss_reason,bairro,nome_decisor';
+
 export default function Leads() {
   const { profile, isAdmin, isSDR } = useAuth();
   const [leads, setLeads] = useState<LeadExt[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [selectedLead, setSelectedLead] = useState<LeadExt | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
@@ -92,6 +97,11 @@ export default function Leads() {
   const [meetingModalOpen, setMeetingModalOpen] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoverColumn, setHoverColumn] = useState<LeadStatus | null>(null);
+  const [tab, setTab] = useState<'pipeline' | 'descartados'>('pipeline');
+  const [pipelinePage, setPipelinePage] = useState(0);
+  const [discardedPage, setDiscardedPage] = useState(0);
+  const [pipelineHasMore, setPipelineHasMore] = useState(true);
+  const [discardedHasMore, setDiscardedHasMore] = useState(true);
 
   // Edit form state
   const [editPhone, setEditPhone] = useState('');
@@ -99,12 +109,26 @@ export default function Leads() {
   const [editDecisor, setEditDecisor] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const fetchLeads = async () => {
-    setLoading(true);
-    const { data, error } = await supabase.from('leads').select('*').order('updated_at', { ascending: false });
+  const activeStatuses: LeadStatus[] = ['novo', 'contato', 'qualificado', 'proposta', 'negociacao'];
+
+  const fetchLeadsPage = async (which: 'pipeline' | 'descartados', page: number, append: boolean) => {
+    append ? setLoadingMore(true) : setLoading(true);
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    let query = supabase.from('leads').select(LEAD_COLS).order('updated_at', { ascending: false }).range(from, to);
+    query = which === 'descartados'
+      ? query.eq('status', 'perdido')
+      : query.in('status', activeStatuses);
+    const { data, error } = await query;
     if (error) { toast.error('Erro ao carregar leads'); }
-    else setLeads((data as LeadExt[]) || []);
-    setLoading(false);
+    else {
+      const rows = (data as unknown as LeadExt[]) || [];
+      setLeads(prev => append ? [...prev, ...rows] : rows);
+      const hasMore = rows.length === PAGE_SIZE;
+      if (which === 'pipeline') setPipelineHasMore(hasMore);
+      else setDiscardedHasMore(hasMore);
+    }
+    setLoading(false); setLoadingMore(false);
   };
 
   const fetchTimeline = async (leadId: string) => {
@@ -112,9 +136,21 @@ export default function Leads() {
     setTimeline(data || []);
   };
 
-  useEffect(() => { fetchLeads(); }, []);
+  useEffect(() => {
+    setPipelinePage(0); setDiscardedPage(0);
+    fetchLeadsPage(tab, 0, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
-  const activeLeads = useMemo(() => leads.filter(l => l.status !== 'perdido' && l.status !== 'ganho'), [leads]);
+  const loadMore = () => {
+    const nextPage = (tab === 'pipeline' ? pipelinePage : discardedPage) + 1;
+    if (tab === 'pipeline') setPipelinePage(nextPage); else setDiscardedPage(nextPage);
+    fetchLeadsPage(tab, nextPage, true);
+  };
+
+  const hasMore = tab === 'pipeline' ? pipelineHasMore : discardedHasMore;
+
+  const activeLeads = useMemo(() => leads.filter(l => l.status !== 'perdido'), [leads]);
   const discardedLeads = useMemo(() => leads.filter(l => l.status === 'perdido'), [leads]);
 
   const byColumn = useMemo(() => {
@@ -209,12 +245,11 @@ export default function Leads() {
           </Button>
         </div>
 
-        <Tabs defaultValue="pipeline" className="space-y-4">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as 'pipeline' | 'descartados')} className="space-y-4">
           <TabsList>
             <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
             <TabsTrigger value="descartados" className="gap-1.5">
               <Trash className="h-3.5 w-3.5" /> Descartados
-              {discardedLeads.length > 0 && <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">{discardedLeads.length}</Badge>}
             </TabsTrigger>
           </TabsList>
 
@@ -306,6 +341,13 @@ export default function Leads() {
                 );
               })}
             </div>
+            {hasMore && tab === 'pipeline' && (
+              <div className="flex justify-center pt-4">
+                <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
+                  {loadingMore ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Carregando...</> : 'Carregar mais resultados'}
+                </Button>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="descartados">
@@ -339,6 +381,13 @@ export default function Leads() {
                 </Card>
               ))}
             </div>
+            {hasMore && tab === 'descartados' && (
+              <div className="flex justify-center pt-4">
+                <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
+                  {loadingMore ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Carregando...</> : 'Carregar mais resultados'}
+                </Button>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
 

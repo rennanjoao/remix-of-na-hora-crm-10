@@ -15,6 +15,7 @@ import { ConsultaHistoryTable } from '@/components/prospeccao/ConsultaHistoryTab
 import { PlacesSearchMode } from '@/components/prospeccao/PlacesSearchMode';
 import { ProspeccaoStatusBar } from '@/components/prospeccao/ProspeccaoStatusBar';
 import { ReactivationList } from '@/components/prospeccao/ReactivationList';
+import { getDefaultScript, interpolateScript } from '@/lib/approach-scripts';
 
 interface Consulta {
   id: string;
@@ -150,12 +151,23 @@ export default function Prospeccao() {
 
   const handleStartEmailFlow = () => toast.info('Acesse a aba Automação para configurar o fluxo de boas-vindas');
 
-  const handleSendWhatsApp = () => {
+  const handleSendWhatsApp = async () => {
     if (!company) return;
     const phone = normalizePhone(company.ddd_telefone_1 || company.ddd_telefone_2);
     if (!phone) return;
-    const msg = encodeURIComponent(`Olá! Somos especializados em soluções de transporte e logística. Gostaríamos de apresentar nossos serviços para a ${company.nome_fantasia || company.razao_social}.`);
-    window.open(`https://wa.me/55${phone}?text=${msg}`, '_blank');
+    const nome = company.nome_fantasia || company.razao_social;
+    const cidade = (company as any).municipio || '';
+    const segmento = (company as any).cnae_fiscal_descricao || '';
+    let body: string;
+    try {
+      const script = await getDefaultScript('whatsapp');
+      body = script
+        ? interpolateScript(script.body, { nome, cidade, segmento })
+        : `Olá! Somos especializados em soluções de transporte e logística. Gostaríamos de apresentar nossos serviços para a ${nome}.`;
+    } catch {
+      body = `Olá! Somos especializados em soluções de transporte e logística. Gostaríamos de apresentar nossos serviços para a ${nome}.`;
+    }
+    window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(body)}`, '_blank');
     toast.success('WhatsApp aberto em nova aba');
   };
 
