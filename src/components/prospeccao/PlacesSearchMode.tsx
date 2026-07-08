@@ -13,13 +13,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import {
   Loader2, Search, MapPin, Star, Phone, Globe, Download, MessageCircle,
   ExternalLink, Sparkles, Flag, Building2, LayoutGrid, List as ListIcon,
-  Mail, Copy, Check, Users,
+  Mail, Copy, Check, Users, Send, CheckSquare, Square,
 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { enrollLeadInCampaign } from '@/lib/campaign-enroll';
 import { getDefaultScript, interpolateScript } from '@/lib/approach-scripts';
 import { logLeadActivity } from '@/lib/lead-activities';
 import { ScheduleMeetingModal } from '@/components/ScheduleMeetingModal';
+import { BulkEmailModal, type BulkEmailTarget } from './BulkEmailModal';
+import { FacadeImageGrid } from './FacadeImageGrid';
 
 interface PlaceItem {
   place_id: string;
