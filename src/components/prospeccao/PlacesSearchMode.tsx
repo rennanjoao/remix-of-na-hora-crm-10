@@ -134,7 +134,46 @@ export function PlacesSearchMode() {
   const [emailOverrides, setEmailOverrides] = useState<Map<string, string>>(new Map());
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
   const [scheduleFor, setScheduleFor] = useState<{ id: string; razao_social: string; nome_fantasia: string | null; email: string | null; telefone: string | null } | null>(null);
+  const [leadInfoByPlace, setLeadInfoByPlace] = useState<Map<string, { status: string; contact_outcome: string | null }>>(new Map());
+  const [statusTab, setStatusTab] = useState<'todos' | 'novos' | 'trabalhados'>('todos');
   const scrapedRequested = useRef<Set<string>>(new Set());
+
+  // Hydrate imported/outcome info from DB whenever results change
+  useEffect(() => {
+    const ids = results.map(r => r.place_id);
+    if (ids.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await (supabase.from('leads') as any)
+        .select('id, place_id, status, contact_outcome')
+        .in('place_id', ids);
+      if (cancelled || !data) return;
+      const nextInfo = new Map<string, { status: string; contact_outcome: string | null }>();
+      const nextImported = new Set<string>();
+      const nextIds = new Map<string, string>();
+      for (const l of data as any[]) {
+        if (!l.place_id) continue;
+        nextInfo.set(l.place_id, { status: l.status, contact_outcome: l.contact_outcome ?? null });
+        nextImported.add(l.place_id);
+        nextIds.set(l.place_id, l.id);
+      }
+      setLeadInfoByPlace(prev => { const m = new Map(prev); nextInfo.forEach((v, k) => m.set(k, v)); return m; });
+      setImportedIds(prev => new Set([...prev, ...nextImported]));
+      setLeadIdByPlace(prev => { const m = new Map(prev); nextIds.forEach((v, k) => m.set(k, v)); return m; });
+    })();
+    return () => { cancelled = true; };
+  }, [results]);
+
+  const CADENCE_OUTCOMES = new Set(['pediu_apresentacao', 'sem_resposta', 'frota_propria']);
+  const getStatusBadge = (placeId: string): { label: string; className: string } => {
+    const imported = importedIds.has(placeId);
+    if (!imported) return { label: 'Novo', className: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30' };
+    const outcome = leadInfoByPlace.get(placeId)?.contact_outcome ?? null;
+    if (outcome && CADENCE_OUTCOMES.has(outcome))
+      return { label: 'Em cadência', className: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30' };
+    if (outcome) return { label: 'Contatado', className: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30' };
+    return { label: 'Importado', className: 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/30' };
+  };
 
   const runSearch = async (q: string, append = false, token: string | null = null) => {
     const term = q.trim();
@@ -170,11 +209,16 @@ export function PlacesSearchMode() {
   const visibleResults = useMemo(() => {
     const filtered = results
       .filter(r => !discardedIds.has(r.place_id))
-      .filter(r => !activeZone || matchesZone(r, activeZone));
+      .filter(r => !activeZone || matchesZone(r, activeZone))
+      .filter(r => {
+        if (statusTab === 'todos') return true;
+        const imported = importedIds.has(r.place_id);
+        return statusTab === 'novos' ? !imported : imported;
+      });
     if (sortMode === 'rating') return [...filtered].sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
     if (sortMode === 'reviews') return [...filtered].sort((a, b) => (b.rating_count ?? -1) - (a.rating_count ?? -1));
     return filtered;
-  }, [results, discardedIds, activeZone, sortMode]);
+  }, [results, discardedIds, activeZone, sortMode, statusTab, importedIds]);
 
   // Auto-scrape emails for visible cards with website
   useEffect(() => {
@@ -276,6 +320,7 @@ export function PlacesSearchMode() {
 
       const { error } = await supabase.from('leads').update(patch as never).eq('id', leadId);
       if (error) throw error;
+      setLeadInfoByPlace(prev => new Map(prev).set(item.place_id, { status: outcome.status, contact_outcome: outcome.id }));
 
       await supabase.from('lead_timeline').insert({
         lead_id: leadId,
@@ -436,13 +481,18 @@ export function PlacesSearchMode() {
                   <h3 className="font-semibold text-sm leading-tight truncate">{item.display_name}</h3>
                   {item.category && <p className="text-xs text-muted-foreground truncate">{item.category}</p>}
                 </div>
-                {item.rating != null && (
-                  <Badge variant="outline" className="gap-1 shrink-0 text-xs">
-                    <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
-                    {item.rating.toFixed(1)}
-                    {item.rating_count ? <span className="text-muted-foreground">({item.rating_count})</span> : null}
-                  </Badge>
-                )}
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  {(() => { const b = getStatusBadge(item.place_id); return (
+                    <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-5 ${b.className}`}>{b.label}</Badge>
+                  ); })()}
+                  {item.rating != null && (
+                    <Badge variant="outline" className="gap-1 text-xs">
+                      <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
+                      {item.rating.toFixed(1)}
+                      {item.rating_count ? <span className="text-muted-foreground">({item.rating_count})</span> : null}
+                    </Badge>
+                  )}
+                </div>
               </div>
               {item.formatted_address && (
                 <p className="text-xs text-muted-foreground flex items-start gap-1">
@@ -562,6 +612,19 @@ export function PlacesSearchMode() {
 
       {results.length > 0 && (
         <>
+          <div className="flex flex-wrap items-center gap-1.5 px-1">
+            <span className="text-xs text-muted-foreground mr-1">Mostrar:</span>
+            {([
+              { id: 'todos', label: 'Todos' },
+              { id: 'novos', label: `Novos (${results.filter(r => !discardedIds.has(r.place_id) && !importedIds.has(r.place_id)).length})` },
+              { id: 'trabalhados', label: `Trabalhados (${results.filter(r => !discardedIds.has(r.place_id) && importedIds.has(r.place_id)).length})` },
+            ] as const).map(t => (
+              <button key={t.id} type="button" onClick={() => setStatusTab(t.id)}
+                className={`text-xs px-2.5 py-1 rounded-full border transition ${statusTab === t.id ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-accent'}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
           <div className="flex items-center justify-between gap-2 flex-wrap px-1">
             <div className="text-xs text-muted-foreground">
               Exibindo {visibleResults.length} de {results.length} resultados

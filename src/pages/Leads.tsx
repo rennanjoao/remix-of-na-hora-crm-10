@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
   Loader2, Download, MoreVertical, Trash2, RotateCcw, Save, MessageSquare, Phone, Mail,
-  Building2, MapPin, Video, Plus, Trash,
+  Building2, MapPin, Video, Plus, Trash, Filter, X,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -103,6 +103,13 @@ export default function Leads() {
   const [pipelineHasMore, setPipelineHasMore] = useState(true);
   const [discardedHasMore, setDiscardedHasMore] = useState(true);
 
+  // Advanced filters
+  const emptyFilters = { minRating: '', uf: '', cidade: '', setor: '', dateFrom: '', dateTo: '' };
+  const [filters, setFilters] = useState(emptyFilters);
+  const [appliedFilters, setAppliedFilters] = useState(emptyFilters);
+  const [showFilters, setShowFilters] = useState(false);
+  const activeFilterCount = Object.values(appliedFilters).filter(v => v && String(v).trim() !== '').length;
+
   // Edit form state
   const [editPhone, setEditPhone] = useState('');
   const [editEmail, setEditEmail] = useState('');
@@ -111,7 +118,7 @@ export default function Leads() {
 
   const activeStatuses: LeadStatus[] = ['novo', 'contato', 'qualificado', 'proposta', 'negociacao'];
 
-  const fetchLeadsPage = async (which: 'pipeline' | 'descartados', page: number, append: boolean) => {
+  const fetchLeadsPage = async (which: 'pipeline' | 'descartados', page: number, append: boolean, f = appliedFilters) => {
     append ? setLoadingMore(true) : setLoading(true);
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
@@ -119,6 +126,12 @@ export default function Leads() {
     query = which === 'descartados'
       ? query.eq('status', 'perdido')
       : query.in('status', activeStatuses);
+    if (f.minRating && !Number.isNaN(Number(f.minRating))) query = query.gte('rating', Number(f.minRating));
+    if (f.uf.trim()) query = query.ilike('estado', f.uf.trim());
+    if (f.cidade.trim()) query = query.ilike('cidade', `%${f.cidade.trim()}%`);
+    if (f.setor.trim()) query = query.ilike('setor', `%${f.setor.trim()}%`);
+    if (f.dateFrom) query = query.gte('created_at', f.dateFrom);
+    if (f.dateTo) query = query.lte('created_at', `${f.dateTo}T23:59:59`);
     const { data, error } = await query;
     if (error) { toast.error('Erro ao carregar leads'); }
     else {
@@ -129,6 +142,18 @@ export default function Leads() {
       else setDiscardedHasMore(hasMore);
     }
     setLoading(false); setLoadingMore(false);
+  };
+
+  const applyFilters = () => {
+    setAppliedFilters(filters);
+    setPipelinePage(0); setDiscardedPage(0);
+    fetchLeadsPage(tab, 0, false, filters);
+  };
+  const clearFilters = () => {
+    setFilters(emptyFilters);
+    setAppliedFilters(emptyFilters);
+    setPipelinePage(0); setDiscardedPage(0);
+    fetchLeadsPage(tab, 0, false, emptyFilters);
   };
 
   const fetchTimeline = async (leadId: string) => {
@@ -240,10 +265,71 @@ export default function Leads() {
             <h1 className="font-display text-3xl font-bold">Pipeline de Leads</h1>
             <p className="text-muted-foreground mt-1 text-sm">Arraste os cards para mover entre estágios</p>
           </div>
-          <Button variant="outline" onClick={exportAll} className="gap-2">
-            <Download className="h-4 w-4" /> Exportar Todos (CSV)
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowFilters(v => !v)} className="gap-2">
+              <Filter className="h-4 w-4" /> Filtros
+              {activeFilterCount > 0 && (
+                <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">{activeFilterCount}</Badge>
+              )}
+            </Button>
+            <Button variant="outline" onClick={exportAll} className="gap-2">
+              <Download className="h-4 w-4" /> Exportar Todos (CSV)
+            </Button>
+          </div>
         </div>
+
+        {showFilters && (
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                <div>
+                  <Label className="text-xs">Rating mínimo</Label>
+                  <Input type="number" step="0.1" min="0" max="5" placeholder="4.0"
+                    value={filters.minRating}
+                    onChange={e => setFilters(f => ({ ...f, minRating: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">UF</Label>
+                  <Input placeholder="SP" maxLength={2}
+                    value={filters.uf}
+                    onChange={e => setFilters(f => ({ ...f, uf: e.target.value.toUpperCase() }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Cidade</Label>
+                  <Input placeholder="Santos"
+                    value={filters.cidade}
+                    onChange={e => setFilters(f => ({ ...f, cidade: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Setor / CNAE</Label>
+                  <Input placeholder="atacado, transporte..."
+                    value={filters.setor}
+                    onChange={e => setFilters(f => ({ ...f, setor: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Importado de</Label>
+                  <Input type="date"
+                    value={filters.dateFrom}
+                    onChange={e => setFilters(f => ({ ...f, dateFrom: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Importado até</Label>
+                  <Input type="date"
+                    value={filters.dateTo}
+                    onChange={e => setFilters(f => ({ ...f, dateTo: e.target.value }))} />
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end">
+                {activeFilterCount > 0 && (
+                  <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1">
+                    <X className="h-3.5 w-3.5" /> Limpar
+                  </Button>
+                )}
+                <Button size="sm" onClick={applyFilters}>Aplicar filtros</Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as 'pipeline' | 'descartados')} className="space-y-4">
           <TabsList>
