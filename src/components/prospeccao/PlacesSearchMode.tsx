@@ -605,7 +605,10 @@ export function PlacesSearchMode() {
     const alreadyImported = importedIds.has(item.place_id);
     const isImporting = importingId === item.place_id;
     return (
-      <TableRow key={item.place_id}>
+      <TableRow key={item.place_id} data-state={selectedIds.has(item.place_id) ? 'selected' : undefined}>
+        <TableCell className="w-8">
+          <Checkbox checked={selectedIds.has(item.place_id)} onCheckedChange={() => toggleSelect(item.place_id)} aria-label="Selecionar" />
+        </TableCell>
         <TableCell className="font-medium max-w-[240px] truncate">{item.display_name}</TableCell>
         <TableCell className="text-xs text-muted-foreground max-w-[280px] truncate">{item.formatted_address}</TableCell>
         <TableCell className="text-xs">
