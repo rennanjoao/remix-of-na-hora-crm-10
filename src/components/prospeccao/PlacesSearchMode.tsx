@@ -416,6 +416,13 @@ export function PlacesSearchMode() {
         content: `📱 Tentativa de contato via WhatsApp para ${phone}`,
         contact_type: 'whatsapp',
       });
+      await logLeadActivity({
+        leadId,
+        userId: profile.id,
+        actionType: 'whatsapp_sent',
+        description: `Enviou WhatsApp para ${phone}`,
+        metadata: { phone },
+      });
     }
   };
 
