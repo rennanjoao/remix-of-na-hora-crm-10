@@ -320,6 +320,7 @@ export function PlacesSearchMode() {
 
       const { error } = await supabase.from('leads').update(patch as never).eq('id', leadId);
       if (error) throw error;
+      setLeadInfoByPlace(prev => new Map(prev).set(item.place_id, { status: outcome.status, contact_outcome: outcome.id }));
 
       await supabase.from('lead_timeline').insert({
         lead_id: leadId,
