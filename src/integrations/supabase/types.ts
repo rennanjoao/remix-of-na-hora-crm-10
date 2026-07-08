@@ -35,6 +35,54 @@ export type Database = {
         }
         Relationships: []
       }
+      approach_scripts: {
+        Row: {
+          body: string
+          channel: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_default: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_default?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_default?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "approach_scripts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "approach_scripts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "sdr_performance_daily"
+            referencedColumns: ["sdr_id"]
+          },
+        ]
+      }
       cnpj_consultas: {
         Row: {
           cidade: string | null
@@ -297,6 +345,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "lead_timeline_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "sdr_performance_daily"
+            referencedColumns: ["sdr_id"]
+          },
+          {
             foreignKeyName: "lead_timeline_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
@@ -322,6 +377,8 @@ export type Database = {
           foto_url: string | null
           id: string
           is_suppressed: boolean | null
+          locked_at: string | null
+          locked_by: string | null
           loss_reason: string | null
           next_contact_date: string | null
           nome_decisor: string | null
@@ -355,6 +412,8 @@ export type Database = {
           foto_url?: string | null
           id?: string
           is_suppressed?: boolean | null
+          locked_at?: string | null
+          locked_by?: string | null
           loss_reason?: string | null
           next_contact_date?: string | null
           nome_decisor?: string | null
@@ -388,6 +447,8 @@ export type Database = {
           foto_url?: string | null
           id?: string
           is_suppressed?: boolean | null
+          locked_at?: string | null
+          locked_by?: string | null
           loss_reason?: string | null
           next_contact_date?: string | null
           nome_decisor?: string | null
@@ -412,11 +473,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "leads_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "sdr_performance_daily"
+            referencedColumns: ["sdr_id"]
+          },
+          {
             foreignKeyName: "leads_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "sdr_performance_daily"
+            referencedColumns: ["sdr_id"]
+          },
+          {
+            foreignKeyName: "leads_locked_by_fkey"
+            columns: ["locked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_locked_by_fkey"
+            columns: ["locked_by"]
+            isOneToOne: false
+            referencedRelation: "sdr_performance_daily"
+            referencedColumns: ["sdr_id"]
           },
         ]
       }
@@ -481,6 +570,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "meetings_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "sdr_performance_daily"
+            referencedColumns: ["sdr_id"]
+          },
+          {
             foreignKeyName: "meetings_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
@@ -493,6 +589,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meetings_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: false
+            referencedRelation: "sdr_performance_daily"
+            referencedColumns: ["sdr_id"]
           },
         ]
       }
@@ -584,11 +687,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "tasks_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "sdr_performance_daily"
+            referencedColumns: ["sdr_id"]
+          },
+          {
             foreignKeyName: "tasks_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "sdr_performance_daily"
+            referencedColumns: ["sdr_id"]
           },
           {
             foreignKeyName: "tasks_lead_id_fkey"
@@ -622,10 +739,75 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      sdr_performance_daily: {
+        Row: {
+          consultas_realizadas: number | null
+          dia: string | null
+          emails_enviados: number | null
+          full_name: string | null
+          leads_importados: number | null
+          reunioes_agendadas: number | null
+          sdr_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      claim_next_lead: {
+        Args: never
+        Returns: {
+          assigned_to: string | null
+          bairro: string | null
+          cidade: string | null
+          cnae_codigo: string | null
+          cnae_descricao: string | null
+          cnpj: string | null
+          contact_outcome: Database["public"]["Enums"]["contact_outcome"] | null
+          created_at: string
+          created_by: string | null
+          email: string | null
+          estado: string | null
+          fonte: string | null
+          foto_url: string | null
+          id: string
+          is_suppressed: boolean | null
+          locked_at: string | null
+          locked_by: string | null
+          loss_reason: string | null
+          next_contact_date: string | null
+          nome_decisor: string | null
+          nome_fantasia: string | null
+          place_id: string | null
+          rating: number | null
+          razao_social: string
+          reactivation_batch: string | null
+          setor: string | null
+          status: Database["public"]["Enums"]["lead_status"] | null
+          telefone: string | null
+          updated_at: string
+          website: string | null
+          zona: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "leads"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_profile_id: { Args: { _user_id: string }; Returns: string }
+      get_sdr_performance: {
+        Args: { _days?: number }
+        Returns: {
+          consultas_realizadas: number
+          dia: string
+          emails_enviados: number
+          full_name: string
+          leads_importados: number
+          reunioes_agendadas: number
+          sdr_id: string
+        }[]
+      }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
@@ -655,6 +837,8 @@ export type Database = {
           foto_url: string | null
           id: string
           is_suppressed: boolean | null
+          locked_at: string | null
+          locked_by: string | null
           loss_reason: string | null
           next_contact_date: string | null
           nome_decisor: string | null
