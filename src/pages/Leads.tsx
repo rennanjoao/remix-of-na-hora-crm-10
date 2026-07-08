@@ -13,6 +13,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { logLeadActivity } from '@/lib/lead-activities';
+import { LeadActivityTimeline } from '@/components/leads/LeadActivityTimeline';
 import {
   Loader2, Download, MoreVertical, Trash2, RotateCcw, Save, MessageSquare, Phone, Mail,
   Building2, MapPin, Video, Plus, Trash, Filter, X,
