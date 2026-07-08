@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { TeamActivityFeed } from '@/components/leads/TeamActivityFeed';
 import { useRoleGuard } from '@/hooks/useRoleGuard';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -304,6 +305,7 @@ export default function CommandCenter() {
                 )}
               </CardContent>
             </Card>
+            <TeamActivityFeed />
           </div>
 
           <Card className="lg:sticky lg:top-20 h-[70vh] flex flex-col">

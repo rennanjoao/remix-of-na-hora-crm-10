@@ -13,9 +13,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { logLeadActivity } from '@/lib/lead-activities';
+import { LeadActivityTimeline } from '@/components/leads/LeadActivityTimeline';
 import {
   Loader2, Download, MoreVertical, Trash2, RotateCcw, Save, MessageSquare, Phone, Mail,
-  Building2, MapPin, Video, Plus, Trash, Filter, X,
+  Building2, MapPin, Video, Plus, Trash, Filter, X, Activity,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -188,10 +190,21 @@ export default function Leads() {
   }, [activeLeads]);
 
   const updateStatus = async (leadId: string, newStatus: LeadStatus, extra?: Partial<LeadExt>) => {
+    const prev = leads.find(l => l.id === leadId);
     const patch = { status: newStatus, ...(extra || {}) };
     const { error } = await supabase.from('leads').update(patch as never).eq('id', leadId);
     if (error) { toast.error('Erro ao atualizar status'); return; }
-    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...patch } as LeadExt : l));
+    setLeads(p => p.map(l => l.id === leadId ? { ...l, ...patch } as LeadExt : l));
+    if (profile) {
+      await logLeadActivity({
+        leadId,
+        userId: profile.id,
+        actionType: 'status_change',
+        description: `Status alterado de "${prev?.status ?? '—'}" para "${newStatus}"`,
+        previousStatus: prev?.status ?? null,
+        newStatus,
+      });
+    }
     toast.success('Status atualizado');
   };
 
@@ -204,6 +217,14 @@ export default function Leads() {
     setEditDecisor(lead.nome_decisor || '');
     setDetailsOpen(true);
     fetchTimeline(lead.id);
+    if (profile) {
+      logLeadActivity({
+        leadId: lead.id,
+        userId: profile.id,
+        actionType: 'viewed',
+        description: `Abriu o detalhe do lead ${lead.razao_social}`,
+      });
+    }
   };
 
   const saveEdits = async () => {
@@ -213,8 +234,23 @@ export default function Leads() {
     const { error } = await supabase.from('leads').update(patch as never).eq('id', selectedLead.id);
     setSaving(false);
     if (error) { toast.error('Erro ao salvar'); return; }
-    setLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, ...patch } as LeadExt : l));
+    setLeads(p => p.map(l => l.id === selectedLead.id ? { ...l, ...patch } as LeadExt : l));
     setSelectedLead({ ...selectedLead, ...patch } as LeadExt);
+    if (profile) {
+      const changes: string[] = [];
+      if (patch.telefone !== selectedLead.telefone) changes.push('telefone');
+      if (patch.email !== selectedLead.email) changes.push('e-mail');
+      if (patch.nome_decisor !== selectedLead.nome_decisor) changes.push('decisor');
+      if (changes.length) {
+        await logLeadActivity({
+          leadId: selectedLead.id,
+          userId: profile.id,
+          actionType: 'field_updated',
+          description: `Editou: ${changes.join(', ')}`,
+          metadata: patch,
+        });
+      }
+    }
     toast.success('Alterações salvas');
   };
 
@@ -224,6 +260,12 @@ export default function Leads() {
       lead_id: selectedLead.id, author_id: profile.id, content: newNote, contact_type: 'note',
     });
     if (error) return toast.error('Erro ao adicionar nota');
+    await logLeadActivity({
+      leadId: selectedLead.id,
+      userId: profile.id,
+      actionType: 'note_added',
+      description: newNote.slice(0, 240),
+    });
     setNewNote(''); fetchTimeline(selectedLead.id); toast.success('Nota adicionada');
   };
 
@@ -535,6 +577,15 @@ export default function Leads() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {selectedLead && (
+                  <div className="space-y-3">
+                    <h4 className="font-medium flex items-center gap-2 text-sm">
+                      <Activity className="h-4 w-4" /> Histórico de Atividades
+                    </h4>
+                    <LeadActivityTimeline leadId={selectedLead.id} />
                   </div>
                 )}
               </div>

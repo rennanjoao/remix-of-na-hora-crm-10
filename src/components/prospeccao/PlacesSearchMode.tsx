@@ -18,6 +18,7 @@ import {
 import { toast } from 'sonner';
 import { enrollLeadInCampaign } from '@/lib/campaign-enroll';
 import { getDefaultScript, interpolateScript } from '@/lib/approach-scripts';
+import { logLeadActivity } from '@/lib/lead-activities';
 import { ScheduleMeetingModal } from '@/components/ScheduleMeetingModal';
 
 interface PlaceItem {
@@ -275,6 +276,13 @@ export function PlacesSearchMode() {
       if (leadId) {
         setImportedIds(p => new Set([...p, item.place_id]));
         setLeadIdByPlace(p => new Map(p).set(item.place_id, leadId));
+        await logLeadActivity({
+          leadId,
+          userId: profile.id,
+          actionType: 'lead_imported',
+          description: `Importado do Google Places: ${item.display_name ?? 'sem nome'}`,
+          metadata: { place_id: item.place_id, source: 'places' },
+        });
         if (!opts.silent) toast.success('Lead importado para o funil!');
       }
       return leadId;
@@ -320,6 +328,7 @@ export function PlacesSearchMode() {
 
       const { error } = await supabase.from('leads').update(patch as never).eq('id', leadId);
       if (error) throw error;
+      const prevInfo = leadInfoByPlace.get(item.place_id);
       setLeadInfoByPlace(prev => new Map(prev).set(item.place_id, { status: outcome.status, contact_outcome: outcome.id }));
 
       await supabase.from('lead_timeline').insert({
@@ -327,6 +336,15 @@ export function PlacesSearchMode() {
         author_id: profile.id,
         content: `🎯 Resultado do contato: ${outcome.label}`,
         contact_type: 'outcome',
+      });
+      await logLeadActivity({
+        leadId,
+        userId: profile.id,
+        actionType: 'status_change',
+        description: `Outcome: ${outcome.label}`,
+        previousStatus: prevInfo?.status ?? null,
+        newStatus: outcome.status,
+        metadata: { outcome_id: outcome.id },
       });
 
       // Cadence triggers
@@ -397,6 +415,13 @@ export function PlacesSearchMode() {
         author_id: profile.id,
         content: `📱 Tentativa de contato via WhatsApp para ${phone}`,
         contact_type: 'whatsapp',
+      });
+      await logLeadActivity({
+        leadId,
+        userId: profile.id,
+        actionType: 'whatsapp_sent',
+        description: `Enviou WhatsApp para ${phone}`,
+        metadata: { phone },
       });
     }
   };

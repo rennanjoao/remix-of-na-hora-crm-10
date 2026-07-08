@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { RefreshCw, RotateCcw, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { logLeadActivity } from '@/lib/lead-activities';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -60,6 +61,14 @@ export function ReactivationList() {
         author_id: profile.id,
         content: `♻️ Lead reativado (outcome anterior: ${prev}${lead.loss_reason ? ` — ${lead.loss_reason}` : ''})`,
         contact_type: 'reactivation',
+      });
+      await logLeadActivity({
+        leadId: lead.id,
+        userId: profile.id,
+        actionType: 'status_change',
+        description: `Lead reativado (outcome anterior: ${prev})`,
+        previousStatus: 'descartado',
+        newStatus: 'novo',
       });
 
       toast.success('Lead reaberto — foi para o funil como Novo');
