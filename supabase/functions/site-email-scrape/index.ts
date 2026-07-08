@@ -1,7 +1,5 @@
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { buildCorsHeaders, requireAuthenticatedUser } from "../_shared/cors.ts";
+
 
 const BLOCKLIST = [
   "example.com", "sentry.io", "sentry-next.wixpress.com", "wixpress.com",
