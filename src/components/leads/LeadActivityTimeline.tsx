@@ -59,7 +59,7 @@ function statusLabel(status: string | null): string {
 
 function descriptionFor(row: Row): string {
   if (row.action_type === 'status_change' && (row.previous_status || row.new_status)) {
-    if (/^status\s+alterado/i.test(row.description)) return 'Status alterado';
+    return `Status alterado: ${statusLabel(row.previous_status)} → ${statusLabel(row.new_status)}`;
   }
   return row.description;
 }
