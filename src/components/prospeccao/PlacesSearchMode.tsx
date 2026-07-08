@@ -612,6 +612,19 @@ export function PlacesSearchMode() {
 
       {results.length > 0 && (
         <>
+          <div className="flex flex-wrap items-center gap-1.5 px-1">
+            <span className="text-xs text-muted-foreground mr-1">Mostrar:</span>
+            {([
+              { id: 'todos', label: 'Todos' },
+              { id: 'novos', label: `Novos (${results.filter(r => !discardedIds.has(r.place_id) && !importedIds.has(r.place_id)).length})` },
+              { id: 'trabalhados', label: `Trabalhados (${results.filter(r => !discardedIds.has(r.place_id) && importedIds.has(r.place_id)).length})` },
+            ] as const).map(t => (
+              <button key={t.id} type="button" onClick={() => setStatusTab(t.id)}
+                className={`text-xs px-2.5 py-1 rounded-full border transition ${statusTab === t.id ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-accent'}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
           <div className="flex items-center justify-between gap-2 flex-wrap px-1">
             <div className="text-xs text-muted-foreground">
               Exibindo {visibleResults.length} de {results.length} resultados
