@@ -148,6 +148,73 @@ export type Database = {
           },
         ]
       }
+      email_blast_lists: {
+        Row: {
+          body_html: string
+          created_at: string
+          created_by: string
+          error_count: number
+          id: string
+          lead_ids: string[]
+          name: string
+          sent_count: number
+          status: string
+          subject: string
+          template_step_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          body_html: string
+          created_at?: string
+          created_by: string
+          error_count?: number
+          id?: string
+          lead_ids?: string[]
+          name: string
+          sent_count?: number
+          status?: string
+          subject: string
+          template_step_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          body_html?: string
+          created_at?: string
+          created_by?: string
+          error_count?: number
+          id?: string
+          lead_ids?: string[]
+          name?: string
+          sent_count?: number
+          status?: string
+          subject?: string
+          template_step_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_blast_lists_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_blast_lists_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "sdr_performance_daily"
+            referencedColumns: ["sdr_id"]
+          },
+          {
+            foreignKeyName: "email_blast_lists_template_step_id_fkey"
+            columns: ["template_step_id"]
+            isOneToOne: false
+            referencedRelation: "email_steps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_campaigns: {
         Row: {
           created_at: string
