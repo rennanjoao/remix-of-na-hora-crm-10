@@ -521,7 +521,12 @@ export function PlacesSearchMode() {
       <Card key={item.place_id} className="overflow-hidden">
         <CardContent className="p-3">
           <div className="flex gap-3">
-            <div className="shrink-0">
+            <div className="shrink-0 flex flex-col items-center gap-2">
+              <Checkbox
+                checked={selectedIds.has(item.place_id)}
+                onCheckedChange={() => toggleSelect(item.place_id)}
+                aria-label="Selecionar"
+              />
               {thumb ? (
                 <img src={thumb} alt={item.display_name || ''} loading="lazy"
                   className="w-24 h-24 object-cover rounded-md border border-border bg-muted"
