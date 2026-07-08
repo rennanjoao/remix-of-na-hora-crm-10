@@ -134,7 +134,46 @@ export function PlacesSearchMode() {
   const [emailOverrides, setEmailOverrides] = useState<Map<string, string>>(new Map());
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
   const [scheduleFor, setScheduleFor] = useState<{ id: string; razao_social: string; nome_fantasia: string | null; email: string | null; telefone: string | null } | null>(null);
+  const [leadInfoByPlace, setLeadInfoByPlace] = useState<Map<string, { status: string; contact_outcome: string | null }>>(new Map());
+  const [statusTab, setStatusTab] = useState<'todos' | 'novos' | 'trabalhados'>('todos');
   const scrapedRequested = useRef<Set<string>>(new Set());
+
+  // Hydrate imported/outcome info from DB whenever results change
+  useEffect(() => {
+    const ids = results.map(r => r.place_id);
+    if (ids.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await (supabase.from('leads') as any)
+        .select('id, place_id, status, contact_outcome')
+        .in('place_id', ids);
+      if (cancelled || !data) return;
+      const nextInfo = new Map<string, { status: string; contact_outcome: string | null }>();
+      const nextImported = new Set<string>();
+      const nextIds = new Map<string, string>();
+      for (const l of data as any[]) {
+        if (!l.place_id) continue;
+        nextInfo.set(l.place_id, { status: l.status, contact_outcome: l.contact_outcome ?? null });
+        nextImported.add(l.place_id);
+        nextIds.set(l.place_id, l.id);
+      }
+      setLeadInfoByPlace(prev => { const m = new Map(prev); nextInfo.forEach((v, k) => m.set(k, v)); return m; });
+      setImportedIds(prev => new Set([...prev, ...nextImported]));
+      setLeadIdByPlace(prev => { const m = new Map(prev); nextIds.forEach((v, k) => m.set(k, v)); return m; });
+    })();
+    return () => { cancelled = true; };
+  }, [results]);
+
+  const CADENCE_OUTCOMES = new Set(['pediu_apresentacao', 'sem_resposta', 'frota_propria']);
+  const getStatusBadge = (placeId: string): { label: string; className: string } => {
+    const imported = importedIds.has(placeId);
+    if (!imported) return { label: 'Novo', className: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30' };
+    const outcome = leadInfoByPlace.get(placeId)?.contact_outcome ?? null;
+    if (outcome && CADENCE_OUTCOMES.has(outcome))
+      return { label: 'Em cadência', className: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30' };
+    if (outcome) return { label: 'Contatado', className: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30' };
+    return { label: 'Importado', className: 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/30' };
+  };
 
   const runSearch = async (q: string, append = false, token: string | null = null) => {
     const term = q.trim();
