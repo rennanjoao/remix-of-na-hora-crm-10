@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Phone, Star, MapPin, ExternalLink, Loader2, ImageOff, Globe } from 'lucide-react';
+import { usePlacesEnrichment } from '@/hooks/usePlacesEnrichment';
 
 interface Props {
   cnpj: string;
@@ -12,49 +11,10 @@ interface Props {
   uf?: string | null;
 }
 
-interface PlacePhoto { name: string; width: number; height: number }
-interface Enrichment {
-  found: boolean;
-  place_id?: string;
-  display_name?: string;
-  formatted_address?: string;
-  phone?: string | null;
-  rating?: number | null;
-  rating_count?: number | null;
-  google_maps_uri?: string;
-  website?: string | null;
-  photos?: PlacePhoto[];
-  _source?: string;
-}
+export function LeadRichProfile(props: Props) {
+  const { loading, data, error } = usePlacesEnrichment(props);
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-
-function photoUrl(name: string, width = 400) {
-  return `${SUPABASE_URL}/functions/v1/places-enrich?photo_name=${encodeURIComponent(name)}&max_width=${width}`;
-}
-
-export function LeadRichProfile({ cnpj, razaoSocial, nomeFantasia, municipio, uf }: Props) {
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<Enrichment | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    async function run() {
-      setLoading(true); setError(null); setData(null);
-      const { data: res, error: err } = await supabase.functions.invoke('places-enrich', {
-        body: { cnpj, razao_social: razaoSocial, nome_fantasia: nomeFantasia, municipio, uf },
-      });
-      if (!active) return;
-      if (err) setError(err.message);
-      else setData(res as Enrichment);
-      setLoading(false);
-    }
-    if (cnpj && (razaoSocial || nomeFantasia)) run();
-    return () => { active = false; };
-  }, [cnpj, razaoSocial, nomeFantasia, municipio, uf]);
-
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground py-3">
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -84,27 +44,6 @@ export function LeadRichProfile({ cnpj, razaoSocial, nomeFantasia, municipio, uf
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Perfil público</span>
         {data._source === 'cache' && <Badge variant="outline" className="text-[10px] py-0 h-4">cache</Badge>}
       </div>
-
-      {data.photos && data.photos.length > 0 && (
-        <div className="flex gap-1.5 overflow-x-auto snap-x scrollbar-thin pb-1 -mx-1 px-1">
-          {data.photos.map((p) => (
-            <a
-              key={p.name}
-              href={photoUrl(p.name, 1200)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="shrink-0 snap-start rounded-md overflow-hidden border border-border/50 hover:border-primary/50 transition"
-            >
-              <img
-                src={photoUrl(p.name, 320)}
-                alt={data.display_name || 'Foto do local'}
-                loading="lazy"
-                className="h-24 w-32 object-cover"
-              />
-            </a>
-          ))}
-        </div>
-      )}
 
       {data.rating != null && (
         <div className="flex items-center gap-1.5 text-sm">

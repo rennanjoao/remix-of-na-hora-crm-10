@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Loader2, Download, Mail, MessageCircle, Building2, MapPin, Phone, AtSign, Truck, AlertTriangle, Hash, Calendar, DollarSign, Users } from 'lucide-react';
 import { LeadRichProfile } from './LeadRichProfile';
+import { PlaceFacadeDialog } from './PlaceFacadeDialog';
 
 interface LeadDetailPanelProps {
   company: BrasilAPICompany;
@@ -62,8 +63,15 @@ export function LeadDetailPanel({ company, onImport, importing, alreadyImported,
     <div className="h-full flex flex-col gap-4 p-4 overflow-y-auto">
       {/* Header */}
       <div className="space-y-2">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+        <div className="flex items-start gap-3">
+          <PlaceFacadeDialog
+            cnpj={company.cnpj}
+            razaoSocial={company.razao_social}
+            nomeFantasia={company.nome_fantasia}
+            municipio={company.municipio}
+            uf={company.uf}
+          />
+          <div className="min-w-0 flex-1">
             <h2 className="font-display text-base font-bold leading-tight truncate">
               {company.nome_fantasia || company.razao_social}
             </h2>
