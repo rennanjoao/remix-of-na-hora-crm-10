@@ -304,6 +304,7 @@ export default function CommandCenter() {
                 )}
               </CardContent>
             </Card>
+            <TeamActivityFeed />
           </div>
 
           <Card className="lg:sticky lg:top-20 h-[70vh] flex flex-col">
