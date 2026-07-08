@@ -754,6 +754,37 @@ export function PlacesSearchMode() {
             </div>
           </div>
 
+          {selectedIds.size > 0 && (
+            <Card className="border-primary/40 bg-primary/5">
+              <CardContent className="p-3 space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 text-sm">
+                    <CheckSquare className="h-4 w-4 text-primary" />
+                    <span className="font-medium">{selectedIds.size} selecionados</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>Limpar</Button>
+                    <Button size="sm" variant="outline" onClick={selectAllVisible}>
+                      {visibleResults.every(r => selectedIds.has(r.place_id)) ? <><Square className="h-3.5 w-3.5 mr-1" />Desmarcar visíveis</> : <><CheckSquare className="h-3.5 w-3.5 mr-1" />Selecionar visíveis</>}
+                    </Button>
+                    <Button size="sm" onClick={() => setBulkOpen(true)}>
+                      <Send className="h-3.5 w-3.5 mr-1" />Ações em Massa
+                    </Button>
+                  </div>
+                </div>
+                <FacadeImageGrid
+                  items={selectedItems.map(item => ({
+                    place_id: item.place_id,
+                    display_name: item.display_name,
+                    photo_name: item.photos[0]?.name ?? null,
+                    fallback_url: logoFromWebsite(item.website),
+                  }))}
+                  onRemove={toggleSelect}
+                />
+              </CardContent>
+            </Card>
+          )}
+
           {viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{visibleResults.map(renderCard)}</div>
           ) : (
@@ -761,6 +792,13 @@ export function PlacesSearchMode() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-8">
+                      <Checkbox
+                        checked={visibleResults.length > 0 && visibleResults.every(r => selectedIds.has(r.place_id))}
+                        onCheckedChange={selectAllVisible}
+                        aria-label="Selecionar todos"
+                      />
+                    </TableHead>
                     <TableHead>Empresa</TableHead>
                     <TableHead>Endereço</TableHead>
                     <TableHead>Telefone</TableHead>
