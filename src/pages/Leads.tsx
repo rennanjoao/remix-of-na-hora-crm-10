@@ -579,6 +579,15 @@ export default function Leads() {
                     </div>
                   </div>
                 )}
+
+                {selectedLead && (
+                  <div className="space-y-3">
+                    <h4 className="font-medium flex items-center gap-2 text-sm">
+                      <Activity className="h-4 w-4" /> Histórico de Atividades
+                    </h4>
+                    <LeadActivityTimeline leadId={selectedLead.id} />
+                  </div>
+                )}
               </div>
             )}
           </DialogContent>
