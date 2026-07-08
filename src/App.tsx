@@ -14,6 +14,7 @@ import Prospeccao from "./pages/Prospeccao";
 import Calendario from "./pages/Calendario";
 import Reunioes from "./pages/Reunioes";
 import Automacao from "./pages/Automacao";
+import AuditoriaSDR from "./pages/AuditoriaSDR";
 import NotFound from "./pages/NotFound";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
@@ -83,6 +84,14 @@ const App = () => (
               element={
                 <ProtectedRoute roles={["admin", "gerente"]}>
                   <CommandCenter />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/auditoria-sdr"
+              element={
+                <ProtectedRoute roles={["admin", "gerente"]}>
+                  <AuditoriaSDR />
                 </ProtectedRoute>
               }
             />
