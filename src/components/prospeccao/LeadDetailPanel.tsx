@@ -89,16 +89,6 @@ export function LeadDetailPanel({ company, onImport, importing, alreadyImported,
             )}
           </div>
         </div>
-          <div className="flex flex-col gap-1 shrink-0">
-            <Badge className={config.color + ' text-xs'}>{config.label}</Badge>
-            {altoPotencial && (
-              <Badge variant="default" className="gap-1 text-xs">
-                <Truck className="h-3 w-3" />
-                Alto Potencial
-              </Badge>
-            )}
-          </div>
-        </div>
 
         <div className="flex items-center gap-2">
           {isAtiva ? (
