@@ -59,7 +59,11 @@ function extract(html: string): { email: string; confidence: "high" | "medium" }
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const auth = await requireAuthenticatedUser(req, corsHeaders);
+  if (!auth.ok) return auth.response!;
 
   try {
     const { website } = await req.json();
