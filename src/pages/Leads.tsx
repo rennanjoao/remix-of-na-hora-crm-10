@@ -109,7 +109,7 @@ export default function Leads() {
   const [editDecisor, setEditDecisor] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const activeStatuses: LeadStatus[] = ['novo', 'contato', 'qualificado', 'proposta', 'negociacao', 'ganho'];
+  const activeStatuses: LeadStatus[] = ['novo', 'contato', 'qualificado', 'proposta', 'negociacao'];
 
   const fetchLeadsPage = async (which: 'pipeline' | 'descartados', page: number, append: boolean) => {
     append ? setLoadingMore(true) : setLoading(true);
