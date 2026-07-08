@@ -18,6 +18,7 @@ import {
 import { toast } from 'sonner';
 import { enrollLeadInCampaign } from '@/lib/campaign-enroll';
 import { getDefaultScript, interpolateScript } from '@/lib/approach-scripts';
+import { logLeadActivity } from '@/lib/lead-activities';
 import { ScheduleMeetingModal } from '@/components/ScheduleMeetingModal';
 
 interface PlaceItem {
