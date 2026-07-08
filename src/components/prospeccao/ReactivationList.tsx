@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { RefreshCw, RotateCcw, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { logLeadActivity } from '@/lib/lead-activities';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
