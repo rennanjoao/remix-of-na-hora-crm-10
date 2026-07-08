@@ -276,6 +276,13 @@ export function PlacesSearchMode() {
       if (leadId) {
         setImportedIds(p => new Set([...p, item.place_id]));
         setLeadIdByPlace(p => new Map(p).set(item.place_id, leadId));
+        await logLeadActivity({
+          leadId,
+          userId: profile.id,
+          actionType: 'lead_imported',
+          description: `Importado do Google Places: ${item.display_name ?? 'sem nome'}`,
+          metadata: { place_id: item.place_id, source: 'places' },
+        });
         if (!opts.silent) toast.success('Lead importado para o funil!');
       }
       return leadId;
