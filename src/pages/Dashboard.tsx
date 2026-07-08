@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Target, Users, Calendar, TrendingUp, CheckCircle, Clock, XCircle, Video, ExternalLink } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { format, differenceInMinutes } from 'date-fns';
+import { toast } from 'sonner';
 import { ptBR } from 'date-fns/locale';
 
 interface Stats {
@@ -44,87 +45,99 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchStats = async () => {
-      const { data: leads } = await supabase.from('leads').select('status');
-      
-      if (leads) {
-        const ganhos = leads.filter(l => l.status === 'ganho').length;
-        const perdidos = leads.filter(l => l.status === 'perdido').length;
-        const emAndamento = leads.filter(l => !['ganho', 'perdido'].includes(l.status || '')).length;
+      try {
+        const { data: leads, error: leadsError } = await supabase.from('leads').select('status');
+        if (leadsError) throw leadsError;
+        
+        if (leads) {
+          const ganhos = leads.filter(l => l.status === 'ganho').length;
+          const perdidos = leads.filter(l => l.status === 'perdido').length;
+          const emAndamento = leads.filter(l => !['ganho', 'perdido'].includes(l.status || '')).length;
 
-        setStats(prev => ({
-          ...prev,
-          totalLeads: leads.length,
-          leadsGanhos: ganhos,
-          leadsPerdidos: perdidos,
-          leadsEmAndamento: emAndamento,
-        }));
+          setStats(prev => ({
+            ...prev,
+            totalLeads: leads.length,
+            leadsGanhos: ganhos,
+            leadsPerdidos: perdidos,
+            leadsEmAndamento: emAndamento,
+          }));
 
-        const statusCount: Record<string, number> = {};
-        leads.forEach(lead => {
-          const status = lead.status || 'novo';
-          statusCount[status] = (statusCount[status] || 0) + 1;
-        });
+          const statusCount: Record<string, number> = {};
+          leads.forEach(lead => {
+            const status = lead.status || 'novo';
+            statusCount[status] = (statusCount[status] || 0) + 1;
+          });
 
-        const statusLabels: Record<string, string> = {
-          novo: 'Novo',
-          contato: 'Contato',
-          qualificado: 'Qualificado',
-          proposta: 'Proposta',
-          negociacao: 'Negociação',
-          ganho: 'Ganho',
-          perdido: 'Perdido',
-        };
+          const statusLabels: Record<string, string> = {
+            novo: 'Novo',
+            contato: 'Contato',
+            qualificado: 'Qualificado',
+            proposta: 'Proposta',
+            negociacao: 'Negociação',
+            ganho: 'Ganho',
+            perdido: 'Perdido',
+          };
 
-        setLeadsByStatus(
-          Object.entries(statusCount).map(([key, value]) => ({
-            name: statusLabels[key] || key,
-            value,
-          }))
-        );
-      }
+          setLeadsByStatus(
+            Object.entries(statusCount).map(([key, value]) => ({
+              name: statusLabels[key] || key,
+              value,
+            }))
+          );
+        }
 
-      const { data: tasks } = await supabase.from('tasks').select('completed');
-      
-      if (tasks) {
-        setStats(prev => ({
-          ...prev,
-          tasksPendentes: tasks.filter(t => !t.completed).length,
-          tasksCompletadas: tasks.filter(t => t.completed).length,
-        }));
+        const { data: tasks, error: tasksError } = await supabase.from('tasks').select('completed');
+        if (tasksError) throw tasksError;
+        
+        if (tasks) {
+          setStats(prev => ({
+            ...prev,
+            tasksPendentes: tasks.filter(t => !t.completed).length,
+            tasksCompletadas: tasks.filter(t => t.completed).length,
+          }));
+        }
+      } catch (e) {
+        console.error('Error fetching stats:', e);
+        toast.error('Erro ao carregar dados', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
       }
     };
 
     const fetchUpcomingMeetings = async () => {
       if (!profile) return;
-      
-      const now = new Date().toISOString();
-      let query = supabase
-        .from('meetings')
-        .select('id, title, meeting_date, jitsi_link, contact_name, lead_id')
-        .gte('meeting_date', now)
-        .order('meeting_date', { ascending: true })
-        .limit(5);
+      try {
+        const now = new Date().toISOString();
+        let query = supabase
+          .from('meetings')
+          .select('id, title, meeting_date, jitsi_link, contact_name, lead_id')
+          .gte('meeting_date', now)
+          .order('meeting_date', { ascending: true })
+          .limit(5);
 
-      if (!isAdmin && !isGerente) {
-        query = query.eq('sdr_id', profile.id);
-      }
+        if (!isAdmin && !isGerente) {
+          query = query.eq('sdr_id', profile.id);
+        }
 
-      const { data } = await query;
-      
-      if (data && data.length > 0) {
-        // Fetch lead names
-        const leadIds = [...new Set(data.map(m => m.lead_id))];
-        const { data: leads } = await supabase
-          .from('leads')
-          .select('id, razao_social, nome_fantasia')
-          .in('id', leadIds);
+        const { data, error } = await query;
+        if (error) throw error;
         
-        const leadMap = new Map(leads?.map(l => [l.id, l.nome_fantasia || l.razao_social]) || []);
-        
-        setUpcomingMeetings(data.map(m => ({
-          ...m,
-          lead_name: leadMap.get(m.lead_id) || 'Empresa',
-        })));
+        if (data && data.length > 0) {
+          // Fetch lead names
+          const leadIds = [...new Set(data.map(m => m.lead_id))];
+          const { data: leads } = await supabase
+            .from('leads')
+            .select('id, razao_social, nome_fantasia')
+            .in('id', leadIds);
+          
+          const leadMap = new Map(leads?.map(l => [l.id, l.nome_fantasia || l.razao_social]) || []);
+          
+          setUpcomingMeetings(data.map(m => ({
+            ...m,
+            lead_name: leadMap.get(m.lead_id) || 'Empresa',
+          })));
+        }
+      } catch (e) {
+        console.error('Error fetching upcoming meetings:', e);
+        toast.error('Erro ao carregar reuniões', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
       }
     };
 

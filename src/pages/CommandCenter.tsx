@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, Activity, Maximize2, Minimize2, UserPlus, Mail, Video, Target, Radio, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 type EventKind = 'lead_novo' | 'lead_status' | 'timeline' | 'email' | 'meeting';
 

@@ -116,8 +116,9 @@ export default function Calendario() {
       const { data, error } = await query.order('start_time', { ascending: true });
       if (error) throw error;
       setTasks(data || []);
-    } catch (error) {
-      console.error('Error fetching tasks:', error);
+    } catch (e) {
+      console.error('Error fetching tasks:', e);
+      toast.error('Erro ao carregar tarefas', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
     }
   };
 
@@ -130,8 +131,9 @@ export default function Calendario() {
       const { data, error } = await query.order('meeting_date', { ascending: true });
       if (error) throw error;
       setMeetings(data || []);
-    } catch (error) {
-      console.error('Error fetching meetings:', error);
+    } catch (e) {
+      console.error('Error fetching meetings:', e);
+      toast.error('Erro ao carregar reuniões', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
     }
   };
 
@@ -150,8 +152,9 @@ export default function Calendario() {
           .in('user_id', userIds);
         setSdrs(profiles || []);
       }
-    } catch (error) {
-      console.error('Error fetching SDRs:', error);
+    } catch (e) {
+      console.error('Error fetching SDRs:', e);
+      toast.error('Erro ao carregar SDRs', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
     }
   };
 
@@ -204,8 +207,9 @@ export default function Calendario() {
         .eq('id', taskId);
       if (error) throw error;
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: !completed } : t));
-    } catch (error) {
-      console.error('Error updating task:', error);
+    } catch (e) {
+      console.error('Error updating task:', e);
+      toast.error('Erro ao atualizar tarefa', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
     }
   };
 

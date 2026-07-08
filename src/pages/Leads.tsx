@@ -122,28 +122,32 @@ export default function Leads() {
 
   const fetchLeadsPage = async (which: 'pipeline' | 'descartados', page: number, append: boolean, f = appliedFilters) => {
     append ? setLoadingMore(true) : setLoading(true);
-    const from = page * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
-    let query = supabase.from('leads').select(LEAD_COLS).order('updated_at', { ascending: false }).range(from, to);
-    query = which === 'descartados'
-      ? query.eq('status', 'perdido')
-      : query.in('status', activeStatuses);
-    if (f.minRating && !Number.isNaN(Number(f.minRating))) query = query.gte('rating', Number(f.minRating));
-    if (f.uf.trim()) query = query.ilike('estado', f.uf.trim());
-    if (f.cidade.trim()) query = query.ilike('cidade', `%${f.cidade.trim()}%`);
-    if (f.setor.trim()) query = query.ilike('setor', `%${f.setor.trim()}%`);
-    if (f.dateFrom) query = query.gte('created_at', f.dateFrom);
-    if (f.dateTo) query = query.lte('created_at', `${f.dateTo}T23:59:59`);
-    const { data, error } = await query;
-    if (error) { toast.error('Erro ao carregar leads'); }
-    else {
+    try {
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      let query = supabase.from('leads').select(LEAD_COLS).order('updated_at', { ascending: false }).range(from, to);
+      query = which === 'descartados'
+        ? query.eq('status', 'perdido')
+        : query.in('status', activeStatuses);
+      if (f.minRating && !Number.isNaN(Number(f.minRating))) query = query.gte('rating', Number(f.minRating));
+      if (f.uf.trim()) query = query.ilike('estado', f.uf.trim());
+      if (f.cidade.trim()) query = query.ilike('cidade', `%${f.cidade.trim()}%`);
+      if (f.setor.trim()) query = query.ilike('setor', `%${f.setor.trim()}%`);
+      if (f.dateFrom) query = query.gte('created_at', f.dateFrom);
+      if (f.dateTo) query = query.lte('created_at', `${f.dateTo}T23:59:59`);
+      const { data, error } = await query;
+      if (error) throw error;
       const rows = (data as unknown as LeadExt[]) || [];
       setLeads(prev => append ? [...prev, ...rows] : rows);
       const hasMore = rows.length === PAGE_SIZE;
       if (which === 'pipeline') setPipelineHasMore(hasMore);
       else setDiscardedHasMore(hasMore);
+    } catch (e) {
+      console.error('Error fetching leads:', e);
+      toast.error('Erro ao carregar leads', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
+    } finally {
+      setLoading(false); setLoadingMore(false);
     }
-    setLoading(false); setLoadingMore(false);
   };
 
   const applyFilters = () => {
@@ -159,8 +163,14 @@ export default function Leads() {
   };
 
   const fetchTimeline = async (leadId: string) => {
-    const { data } = await supabase.from('lead_timeline').select('*').eq('lead_id', leadId).order('created_at', { ascending: false });
-    setTimeline(data || []);
+    try {
+      const { data, error } = await supabase.from('lead_timeline').select('*').eq('lead_id', leadId).order('created_at', { ascending: false });
+      if (error) throw error;
+      setTimeline(data || []);
+    } catch (e) {
+      console.error('Error fetching timeline:', e);
+      toast.error('Erro ao carregar histórico', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
+    }
   };
 
   useEffect(() => {
@@ -190,22 +200,27 @@ export default function Leads() {
   }, [activeLeads]);
 
   const updateStatus = async (leadId: string, newStatus: LeadStatus, extra?: Partial<LeadExt>) => {
-    const prev = leads.find(l => l.id === leadId);
-    const patch = { status: newStatus, ...(extra || {}) };
-    const { error } = await supabase.from('leads').update(patch as never).eq('id', leadId);
-    if (error) { toast.error('Erro ao atualizar status'); return; }
-    setLeads(p => p.map(l => l.id === leadId ? { ...l, ...patch } as LeadExt : l));
-    if (profile) {
-      await logLeadActivity({
-        leadId,
-        userId: profile.id,
-        actionType: 'status_change',
-        description: `Status alterado de "${prev?.status ?? '—'}" para "${newStatus}"`,
-        previousStatus: prev?.status ?? null,
-        newStatus,
-      });
+    try {
+      const prev = leads.find(l => l.id === leadId);
+      const patch = { status: newStatus, ...(extra || {}) };
+      const { error } = await supabase.from('leads').update(patch as never).eq('id', leadId);
+      if (error) throw error;
+      setLeads(p => p.map(l => l.id === leadId ? { ...l, ...patch } as LeadExt : l));
+      if (profile) {
+        await logLeadActivity({
+          leadId,
+          userId: profile.id,
+          actionType: 'status_change',
+          description: `Status alterado de "${prev?.status ?? '—'}" para "${newStatus}"`,
+          previousStatus: prev?.status ?? null,
+          newStatus,
+        });
+      }
+      toast.success('Status atualizado');
+    } catch (e) {
+      console.error('Error updating status:', e);
+      toast.error('Erro ao atualizar status', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
     }
-    toast.success('Status atualizado');
   };
 
   const restoreLead = (id: string) => updateStatus(id, 'novo', { loss_reason: null });
@@ -230,61 +245,78 @@ export default function Leads() {
   const saveEdits = async () => {
     if (!selectedLead) return;
     setSaving(true);
-    const patch = { telefone: editPhone || null, email: editEmail || null, nome_decisor: editDecisor || null };
-    const { error } = await supabase.from('leads').update(patch as never).eq('id', selectedLead.id);
-    setSaving(false);
-    if (error) { toast.error('Erro ao salvar'); return; }
-    setLeads(p => p.map(l => l.id === selectedLead.id ? { ...l, ...patch } as LeadExt : l));
-    setSelectedLead({ ...selectedLead, ...patch } as LeadExt);
-    if (profile) {
-      const changes: string[] = [];
-      if (patch.telefone !== selectedLead.telefone) changes.push('telefone');
-      if (patch.email !== selectedLead.email) changes.push('e-mail');
-      if (patch.nome_decisor !== selectedLead.nome_decisor) changes.push('decisor');
-      if (changes.length) {
-        await logLeadActivity({
-          leadId: selectedLead.id,
-          userId: profile.id,
-          actionType: 'field_updated',
-          description: `Editou: ${changes.join(', ')}`,
-          metadata: patch,
-        });
+    try {
+      const patch = { telefone: editPhone || null, email: editEmail || null, nome_decisor: editDecisor || null };
+      const { error } = await supabase.from('leads').update(patch as never).eq('id', selectedLead.id);
+      if (error) throw error;
+      setLeads(p => p.map(l => l.id === selectedLead.id ? { ...l, ...patch } as LeadExt : l));
+      setSelectedLead({ ...selectedLead, ...patch } as LeadExt);
+      if (profile) {
+        const changes: string[] = [];
+        if (patch.telefone !== selectedLead.telefone) changes.push('telefone');
+        if (patch.email !== selectedLead.email) changes.push('e-mail');
+        if (patch.nome_decisor !== selectedLead.nome_decisor) changes.push('decisor');
+        if (changes.length) {
+          await logLeadActivity({
+            leadId: selectedLead.id,
+            userId: profile.id,
+            actionType: 'field_updated',
+            description: `Editou: ${changes.join(', ')}`,
+            metadata: patch,
+          });
+        }
       }
+      toast.success('Alterações salvas');
+    } catch (e) {
+      console.error('Error saving edits:', e);
+      toast.error('Erro ao salvar', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
+    } finally {
+      setSaving(false);
     }
-    toast.success('Alterações salvas');
   };
 
   const addNote = async () => {
     if (!selectedLead || !newNote.trim() || !profile) return;
-    const { error } = await supabase.from('lead_timeline').insert({
-      lead_id: selectedLead.id, author_id: profile.id, content: newNote, contact_type: 'note',
-    });
-    if (error) return toast.error('Erro ao adicionar nota');
-    await logLeadActivity({
-      leadId: selectedLead.id,
-      userId: profile.id,
-      actionType: 'note_added',
-      description: newNote.slice(0, 240),
-    });
-    setNewNote(''); fetchTimeline(selectedLead.id); toast.success('Nota adicionada');
+    try {
+      const { error } = await supabase.from('lead_timeline').insert({
+        lead_id: selectedLead.id, author_id: profile.id, content: newNote, contact_type: 'note',
+      });
+      if (error) throw error;
+      await logLeadActivity({
+        leadId: selectedLead.id,
+        userId: profile.id,
+        actionType: 'note_added',
+        description: newNote.slice(0, 240),
+      });
+      setNewNote(''); fetchTimeline(selectedLead.id); toast.success('Nota adicionada');
+    } catch (e) {
+      console.error('Error adding note:', e);
+      toast.error('Erro ao adicionar nota', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
+    }
   };
 
   const recordCallLead = async (lead: LeadExt) => {
     if (!profile || !lead.telefone) return;
-    await supabase.from('lead_timeline').insert({
-      lead_id: lead.id,
-      author_id: profile.id,
-      content: `☎️ Ligação realizada para ${lead.telefone}`,
-      contact_type: 'call',
-    });
-    await logLeadActivity({
-      leadId: lead.id,
-      userId: profile.id,
-      actionType: 'call_made',
-      description: `Ligação realizada para ${lead.telefone}`,
-      metadata: { phone: lead.telefone },
-    });
-    fetchTimeline(lead.id);
+    try {
+      const { error } = await supabase.from('lead_timeline').insert({
+        lead_id: lead.id,
+        author_id: profile.id,
+        content: `☎️ Ligação realizada para ${lead.telefone}`,
+        contact_type: 'call',
+      });
+      if (error) throw error;
+      await logLeadActivity({
+        leadId: lead.id,
+        userId: profile.id,
+        actionType: 'call_made',
+        description: `Ligação realizada para ${lead.telefone}`,
+        metadata: { phone: lead.telefone },
+      });
+      fetchTimeline(lead.id);
+    } catch (e) {
+      console.error('Error recording call:', e);
+      toast.error('Erro ao registrar ligação', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
+    }
   };
 
   // Drag & drop handlers
