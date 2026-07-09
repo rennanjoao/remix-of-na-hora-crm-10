@@ -290,6 +290,140 @@ export type Database = {
         }
         Relationships: []
       }
+      email_flow_recipients: {
+        Row: {
+          added_at: string
+          flow_id: string
+          id: string
+          lead_id: string
+          status: string
+        }
+        Insert: {
+          added_at?: string
+          flow_id: string
+          id?: string
+          lead_id: string
+          status?: string
+        }
+        Update: {
+          added_at?: string
+          flow_id?: string
+          id?: string
+          lead_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_flow_recipients_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "email_flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_flow_recipients_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_flow_steps: {
+        Row: {
+          blocks: Json
+          body_html: string
+          created_at: string
+          delay_days: number
+          flow_id: string
+          id: string
+          name: string | null
+          order_index: number
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          blocks?: Json
+          body_html?: string
+          created_at?: string
+          delay_days?: number
+          flow_id: string
+          id?: string
+          name?: string | null
+          order_index?: number
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          blocks?: Json
+          body_html?: string
+          created_at?: string
+          delay_days?: number
+          flow_id?: string
+          id?: string
+          name?: string | null
+          order_index?: number
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_flow_steps_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "email_flows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_flows: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          name: string
+          status: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          name: string
+          status?: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          name?: string
+          status?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_flows_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_flows_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "sdr_performance_daily"
+            referencedColumns: ["sdr_id"]
+          },
+        ]
+      }
       email_inbox: {
         Row: {
           created_at: string
