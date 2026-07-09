@@ -506,7 +506,7 @@ export default function Calendario() {
                                   ? "bg-muted text-muted-foreground line-through" 
                                   : "bg-primary text-primary-foreground"
                               )}
-                              onClick={() => toggleTaskComplete(task.id, task.completed)}
+                              onClick={() => toggleTaskComplete(task.id, task.completed ?? false)}
                             >
                               {task.completed && <Check className="h-3 w-3" />}
                               {!task.all_day && (
