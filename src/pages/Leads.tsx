@@ -46,7 +46,7 @@ interface Lead {
 type LeadExt = Lead & { nome_decisor?: string | null };
 
 interface TimelineEntry {
-  id: string; content: string; contact_type: string; created_at: string; author_id: string;
+  id: string; content: string; contact_type: string | null; created_at: string; author_id: string | null;
 }
 
 // Kanban columns → mapped to existing enum values

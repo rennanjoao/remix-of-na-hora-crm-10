@@ -23,8 +23,8 @@ interface Task {
   description: string | null;
   start_time: string;
   end_time: string | null;
-  all_day: boolean;
-  completed: boolean;
+  all_day: boolean | null;
+  completed: boolean | null;
   assigned_to: string;
   lead_id: string | null;
 }
@@ -35,7 +35,7 @@ interface Meeting {
   description: string | null;
   meeting_date: string;
   duration_minutes: number;
-  jitsi_link: string;
+  jitsi_link: string | null;
   contact_name: string | null;
   sdr_id: string;
   lead_id: string;
