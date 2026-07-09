@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { Loader2, UserCog, Search, Shield, UserCheck, UserX } from 'lucide-react';
 import { CreateUserDialog } from '@/components/admin/CreateUserDialog';
 import { ScriptsManager } from '@/components/admin/ScriptsManager';
+import { EmailDomainManager } from '@/components/admin/EmailDomainManager';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type AppRole = 'admin' | 'sdr' | 'gerente' | 'motorista';
@@ -173,6 +174,7 @@ export default function Admin() {
           <TabsList>
             <TabsTrigger value="users">Usuários</TabsTrigger>
             <TabsTrigger value="scripts">Scripts de Abordagem</TabsTrigger>
+            <TabsTrigger value="email-domain">Domínio de E-mail</TabsTrigger>
           </TabsList>
 
           <TabsContent value="users">
@@ -311,6 +313,10 @@ export default function Admin() {
 
           <TabsContent value="scripts">
             <ScriptsManager />
+          </TabsContent>
+
+          <TabsContent value="email-domain">
+            <EmailDomainManager />
           </TabsContent>
         </Tabs>
       </div>
