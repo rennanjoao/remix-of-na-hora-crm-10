@@ -260,6 +260,7 @@ export type Database = {
           updated_at: string
           verified_at: string | null
           webhook_id: string | null
+          webhook_signing_secret: string | null
         }
         Insert: {
           created_at?: string
@@ -272,6 +273,7 @@ export type Database = {
           updated_at?: string
           verified_at?: string | null
           webhook_id?: string | null
+          webhook_signing_secret?: string | null
         }
         Update: {
           created_at?: string
@@ -284,6 +286,7 @@ export type Database = {
           updated_at?: string
           verified_at?: string | null
           webhook_id?: string | null
+          webhook_signing_secret?: string | null
         }
         Relationships: []
       }
