@@ -284,7 +284,7 @@ export default function Admin() {
                               <div className="flex items-center justify-between">
                                 <Label>Usuário Ativo</Label>
                                 <Switch
-                                  checked={selectedUser.is_active}
+                                  checked={selectedUser.is_active ?? false}
                                   onCheckedChange={(checked) => {
                                     toggleUserActive(selectedUser.user_id, checked);
                                     setSelectedUser({ ...selectedUser, is_active: checked });
