@@ -76,8 +76,8 @@ function SortableBlock({
 }
 
 function BlockInspector({ block, onChange }: { block: EmailBlock; onChange: (b: EmailBlock) => void }) {
-  const patch = <K extends keyof EmailBlock>(key: K, value: EmailBlock[K]) =>
-    onChange({ ...block, [key]: value } as EmailBlock);
+  const patch = (key: string, value: unknown) =>
+    onChange({ ...(block as Record<string, unknown>), [key]: value } as unknown as EmailBlock);
 
   if (block.type === 'text') {
     return (
