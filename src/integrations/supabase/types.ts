@@ -248,6 +248,98 @@ export type Database = {
         }
         Relationships: []
       }
+      email_domains: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          dns_records: Json | null
+          domain: string
+          id: string
+          resend_domain_id: string | null
+          status: string
+          updated_at: string
+          verified_at: string | null
+          webhook_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          dns_records?: Json | null
+          domain: string
+          id?: string
+          resend_domain_id?: string | null
+          status?: string
+          updated_at?: string
+          verified_at?: string | null
+          webhook_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          dns_records?: Json | null
+          domain?: string
+          id?: string
+          resend_domain_id?: string | null
+          status?: string
+          updated_at?: string
+          verified_at?: string | null
+          webhook_id?: string | null
+        }
+        Relationships: []
+      }
+      email_inbox: {
+        Row: {
+          created_at: string
+          from_email: string
+          html: string | null
+          id: string
+          lead_id: string | null
+          raw_payload: Json | null
+          received_at: string
+          resend_email_id: string | null
+          subject: string | null
+          text: string | null
+          to_email: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          from_email: string
+          html?: string | null
+          id?: string
+          lead_id?: string | null
+          raw_payload?: Json | null
+          received_at?: string
+          resend_email_id?: string | null
+          subject?: string | null
+          text?: string | null
+          to_email?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          from_email?: string
+          html?: string | null
+          id?: string
+          lead_id?: string | null
+          raw_payload?: Json | null
+          received_at?: string
+          resend_email_id?: string | null
+          subject?: string | null
+          text?: string | null
+          to_email?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_inbox_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_sends: {
         Row: {
           campaign_id: string
