@@ -314,6 +314,10 @@ export default function Admin() {
           <TabsContent value="scripts">
             <ScriptsManager />
           </TabsContent>
+
+          <TabsContent value="email-domain">
+            <EmailDomainManager />
+          </TabsContent>
         </Tabs>
       </div>
     </DashboardLayout>
