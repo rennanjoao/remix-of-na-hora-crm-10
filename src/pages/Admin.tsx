@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { Loader2, UserCog, Search, Shield, UserCheck, UserX } from 'lucide-react';
 import { CreateUserDialog } from '@/components/admin/CreateUserDialog';
 import { ScriptsManager } from '@/components/admin/ScriptsManager';
+import { EmailDomainManager } from '@/components/admin/EmailDomainManager';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type AppRole = 'admin' | 'sdr' | 'gerente' | 'motorista';
