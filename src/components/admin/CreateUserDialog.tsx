@@ -44,13 +44,14 @@ export function CreateUserDialog({ onCreated }: Props) {
         body: { full_name: fullName, email, senha_temporaria: password, role },
       });
       if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
+      const respData = data as { error?: string } | null;
+      if (respData?.error) throw new Error(respData.error);
       toast.success('Usuário criado com sucesso');
       reset();
       setOpen(false);
       onCreated();
-    } catch (e: any) {
-      toast.error(e.message ?? 'Erro ao criar usuário');
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Erro ao criar usuário');
     } finally {
       setLoading(false);
     }

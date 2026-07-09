@@ -133,7 +133,7 @@ export function AppSidebar() {
           <Avatar className="h-9 w-9 border-2 border-sidebar-accent">
             <AvatarImage src={profile?.avatar_url || undefined} />
             <AvatarFallback className="bg-sidebar-accent text-sidebar-foreground text-sm">
-              {getInitials(profile?.full_name)}
+              {getInitials(profile?.full_name ?? null)}
             </AvatarFallback>
           </Avatar>
           {!collapsed && (

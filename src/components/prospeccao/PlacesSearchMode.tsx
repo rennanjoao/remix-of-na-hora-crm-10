@@ -150,16 +150,16 @@ export function PlacesSearchMode() {
     if (ids.length === 0) return;
     let cancelled = false;
     (async () => {
-      const { data } = await (supabase.from('leads') as any)
+      const { data } = await supabase.from('leads')
         .select('id, place_id, status, contact_outcome')
         .in('place_id', ids);
       if (cancelled || !data) return;
       const nextInfo = new Map<string, { status: string; contact_outcome: string | null }>();
       const nextImported = new Set<string>();
       const nextIds = new Map<string, string>();
-      for (const l of data as any[]) {
+      for (const l of data) {
         if (!l.place_id) continue;
-        nextInfo.set(l.place_id, { status: l.status, contact_outcome: l.contact_outcome ?? null });
+        nextInfo.set(l.place_id, { status: l.status ?? 'novo', contact_outcome: l.contact_outcome ?? null });
         nextImported.add(l.place_id);
         nextIds.set(l.place_id, l.id);
       }

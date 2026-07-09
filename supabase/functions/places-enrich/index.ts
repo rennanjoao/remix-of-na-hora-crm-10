@@ -1,13 +1,26 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { buildCorsHeaders, requireAuthenticatedUser } from "../_shared/cors.ts";
 
 const CACHE_TTL_HOURS = 24 * 7;
 
 interface PlacePhoto { name: string; widthPx: number; heightPx: number }
+interface AddressComponent { types?: string[]; shortText?: string; longText?: string }
+interface PlaceSearchItem {
+  id: string;
+  displayName?: { text: string };
+  formattedAddress?: string;
+  shortFormattedAddress?: string;
+  addressComponents?: AddressComponent[];
+  nationalPhoneNumber?: string;
+  internationalPhoneNumber?: string;
+  rating?: number;
+  userRatingCount?: number;
+  websiteUri?: string;
+  googleMapsUri?: string;
+  primaryTypeDisplayName?: { text: string };
+  photos?: PlacePhoto[];
+  businessStatus?: string;
+}
 interface PlaceDetails {
   id: string;
   displayName?: { text: string };
@@ -22,7 +35,13 @@ interface PlaceDetails {
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const auth = await requireAuthenticatedUser(req, corsHeaders);
+  if (!auth.ok) return auth.response!;
+
+
 
   try {
     const apiKey = Deno.env.get("GOOGLE_API_KEY");
@@ -94,25 +113,26 @@ Deno.serve(async (req) => {
       }
 
       const listData = await listRes.json();
-      const items = (listData.places || []).map((p: any) => {
-        const comps = p.addressComponents || [];
-        const findComp = (type: string) => comps.find((c: any) => (c.types || []).includes(type))?.shortText
-          || comps.find((c: any) => (c.types || []).includes(type))?.longText || null;
+      const items = ((listData.places ?? []) as PlaceSearchItem[]).map((p) => {
+        const comps: AddressComponent[] = p.addressComponents ?? [];
+        const findComp = (type: string) =>
+          comps.find((c) => (c.types ?? []).includes(type))?.shortText ??
+          comps.find((c) => (c.types ?? []).includes(type))?.longText ?? null;
         return {
           place_id: p.id,
-          display_name: p.displayName?.text || null,
-          formatted_address: p.formattedAddress || p.shortFormattedAddress || null,
-          phone: p.internationalPhoneNumber || p.nationalPhoneNumber || null,
-          rating: p.rating || null,
-          rating_count: p.userRatingCount || null,
-          website: p.websiteUri || null,
-          google_maps_uri: p.googleMapsUri || null,
-          category: p.primaryTypeDisplayName?.text || null,
-          business_status: p.businessStatus || null,
+          display_name: p.displayName?.text ?? null,
+          formatted_address: p.formattedAddress ?? p.shortFormattedAddress ?? null,
+          phone: p.internationalPhoneNumber ?? p.nationalPhoneNumber ?? null,
+          rating: p.rating ?? null,
+          rating_count: p.userRatingCount ?? null,
+          website: p.websiteUri ?? null,
+          google_maps_uri: p.googleMapsUri ?? null,
+          category: p.primaryTypeDisplayName?.text ?? null,
+          business_status: p.businessStatus ?? null,
           city: findComp("administrative_area_level_2"),
           state: findComp("administrative_area_level_1"),
-          neighborhood: findComp("sublocality_level_1") || findComp("sublocality"),
-          photos: (p.photos || []).slice(0, 3).map((ph: any) => ({
+          neighborhood: findComp("sublocality_level_1") ?? findComp("sublocality"),
+          photos: (p.photos ?? []).slice(0, 3).map((ph) => ({
             name: ph.name, width: ph.widthPx, height: ph.heightPx,
           })),
         };
@@ -146,7 +166,7 @@ Deno.serve(async (req) => {
         .limit(1)
         .maybeSingle();
 
-      const enrich = (cached?.dados_completos as any)?.places_enrichment;
+      const enrich = (cached?.dados_completos as Record<string, { _cached_at?: string } & Record<string, unknown>> | null)?.places_enrichment;
       if (enrich && enrich._cached_at) {
         const age = Date.now() - new Date(enrich._cached_at).getTime();
         if (age < CACHE_TTL_HOURS * 3600 * 1000) {
@@ -228,7 +248,7 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (existing) {
-        const merged = { ...(existing.dados_completos as any || {}), places_enrichment: result };
+        const merged = { ...((existing.dados_completos as Record<string, unknown>) ?? {}), places_enrichment: result };
         await supabase.from("cnpj_consultas").update({ dados_completos: merged }).eq("id", existing.id);
       }
     }

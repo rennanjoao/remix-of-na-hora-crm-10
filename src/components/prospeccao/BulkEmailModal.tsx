@@ -66,14 +66,14 @@ export function BulkEmailModal({ open, onOpenChange, targets, onEnsureLead }: Pr
       setLoading(true);
       const { data: campaigns } = await supabase.from('email_campaigns').select('id, name').eq('status', 'ativa');
       if (!campaigns) { setLoading(false); return; }
-      const ids = campaigns.map((c: any) => c.id);
+      const ids = campaigns.map((c) => c.id);
       if (ids.length === 0) { setTemplates([]); setLoading(false); return; }
       const { data: steps } = await supabase.from('email_steps')
         .select('id, subject, body_html, campaign_id, step_order')
         .in('campaign_id', ids)
         .order('step_order');
-      const byCamp = new Map(campaigns.map((c: any) => [c.id, c.name]));
-      const list: Template[] = (steps ?? []).map((s: any) => ({
+      const byCamp = new Map(campaigns.map((c) => [c.id, c.name]));
+      const list: Template[] = (steps ?? []).map((s) => ({
         id: s.id,
         subject: s.subject,
         body_html: s.body_html,
@@ -99,7 +99,7 @@ export function BulkEmailModal({ open, onOpenChange, targets, onEnsureLead }: Pr
       if (!id) id = await onEnsureLead(t.place_id);
       if (id) leadIds.push(id);
     }
-    const { data, error } = await (supabase.from('email_blast_lists') as any)
+    const { data, error } = await supabase.from('email_blast_lists')
       .insert({
         name: listName || 'Disparo sem nome',
         subject,
@@ -160,7 +160,7 @@ export function BulkEmailModal({ open, onOpenChange, targets, onEnsureLead }: Pr
       setProgress({ done: i + 1, total: withEmail.length });
     }
     if (listId) {
-      await (supabase.from('email_blast_lists') as any)
+      await supabase.from('email_blast_lists')
         .update({ status: 'enviado', sent_count: ok, error_count: err })
         .eq('id', listId);
     }

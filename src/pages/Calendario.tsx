@@ -23,8 +23,8 @@ interface Task {
   description: string | null;
   start_time: string;
   end_time: string | null;
-  all_day: boolean;
-  completed: boolean;
+  all_day: boolean | null;
+  completed: boolean | null;
   assigned_to: string;
   lead_id: string | null;
 }
@@ -35,7 +35,7 @@ interface Meeting {
   description: string | null;
   meeting_date: string;
   duration_minutes: number;
-  jitsi_link: string;
+  jitsi_link: string | null;
   contact_name: string | null;
   sdr_id: string;
   lead_id: string;
@@ -116,8 +116,9 @@ export default function Calendario() {
       const { data, error } = await query.order('start_time', { ascending: true });
       if (error) throw error;
       setTasks(data || []);
-    } catch (error) {
-      console.error('Error fetching tasks:', error);
+    } catch (e) {
+      console.error('Error fetching tasks:', e);
+      toast.error('Erro ao carregar tarefas', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
     }
   };
 
@@ -130,8 +131,9 @@ export default function Calendario() {
       const { data, error } = await query.order('meeting_date', { ascending: true });
       if (error) throw error;
       setMeetings(data || []);
-    } catch (error) {
-      console.error('Error fetching meetings:', error);
+    } catch (e) {
+      console.error('Error fetching meetings:', e);
+      toast.error('Erro ao carregar reuniões', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
     }
   };
 
@@ -150,8 +152,9 @@ export default function Calendario() {
           .in('user_id', userIds);
         setSdrs(profiles || []);
       }
-    } catch (error) {
-      console.error('Error fetching SDRs:', error);
+    } catch (e) {
+      console.error('Error fetching SDRs:', e);
+      toast.error('Erro ao carregar SDRs', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
     }
   };
 
@@ -204,8 +207,9 @@ export default function Calendario() {
         .eq('id', taskId);
       if (error) throw error;
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: !completed } : t));
-    } catch (error) {
-      console.error('Error updating task:', error);
+    } catch (e) {
+      console.error('Error updating task:', e);
+      toast.error('Erro ao atualizar tarefa', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
     }
   };
 
@@ -502,7 +506,7 @@ export default function Calendario() {
                                   ? "bg-muted text-muted-foreground line-through" 
                                   : "bg-primary text-primary-foreground"
                               )}
-                              onClick={() => toggleTaskComplete(task.id, task.completed)}
+                              onClick={() => toggleTaskComplete(task.id, task.completed ?? false)}
                             >
                               {task.completed && <Check className="h-3 w-3" />}
                               {!task.all_day && (

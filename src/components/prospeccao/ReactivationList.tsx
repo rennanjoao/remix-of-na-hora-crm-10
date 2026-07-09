@@ -37,7 +37,7 @@ export function ReactivationList() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data } = await (supabase.rpc as any)('leads_para_reativar');
+    const { data } = await supabase.rpc('leads_para_reativar');
     setLeads((data as ReactivateLead[] | null) || []);
     setLoading(false);
   }, []);

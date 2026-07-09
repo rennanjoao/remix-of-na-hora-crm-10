@@ -106,7 +106,7 @@ export default function Reunioes() {
         lead_id: leads[0]?.id || profile.id, // fallback
         meeting_type: 'instant',
         status: 'em_andamento',
-      } as any);
+      });
 
       if (error) throw error;
       toast.success('Sala criada!');

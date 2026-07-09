@@ -48,23 +48,29 @@ export default function Prospeccao() {
 
   const loadConsultas = useCallback(async () => {
     if (!profile) return;
-    const { data } = await supabase
-      .from('cnpj_consultas')
-      .select('id, cnpj, razao_social, cnae_codigo, cidade, estado, importado, created_at')
-      .order('created_at', { ascending: false })
-      .limit(50);
-    if (data) setConsultas(data);
+    try {
+      const { data, error } = await supabase
+        .from('cnpj_consultas')
+        .select('id, cnpj, razao_social, cnae_codigo, cidade, estado, importado, created_at')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      if (data) setConsultas(data);
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const [{ count: countHoje }, { count: countImportadas }, { count: countEmails }] = await Promise.all([
-      supabase.from('cnpj_consultas').select('id', { count: 'exact', head: true }).gte('created_at', today.toISOString()),
-      supabase.from('cnpj_consultas').select('id', { count: 'exact', head: true }).eq('importado', true).gte('created_at', today.toISOString()),
-      supabase.from('email_sends').select('id', { count: 'exact', head: true }).gte('created_at', today.toISOString()),
-    ]);
-    setConsultadasHoje(countHoje || 0);
-    setImportadasHoje(countImportadas || 0);
-    setEmailsHoje(countEmails || 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const [{ count: countHoje }, { count: countImportadas }, { count: countEmails }] = await Promise.all([
+        supabase.from('cnpj_consultas').select('id', { count: 'exact', head: true }).gte('created_at', today.toISOString()),
+        supabase.from('cnpj_consultas').select('id', { count: 'exact', head: true }).eq('importado', true).gte('created_at', today.toISOString()),
+        supabase.from('email_sends').select('id', { count: 'exact', head: true }).gte('created_at', today.toISOString()),
+      ]);
+      setConsultadasHoje(countHoje || 0);
+      setImportadasHoje(countImportadas || 0);
+      setEmailsHoje(countEmails || 0);
+    } catch (e) {
+      console.error('Error loading consultas:', e);
+      toast.error('Erro ao carregar dados', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
+    }
   }, [profile]);
 
   useEffect(() => {
@@ -75,32 +81,37 @@ export default function Prospeccao() {
     if (!profile) return;
     reset();
     setAlreadyImported(false);
+    try {
+      const existing = consultas.find(c => c.cnpj === cnpj);
+      if (existing?.importado) setAlreadyImported(true);
 
-    const existing = consultas.find(c => c.cnpj === cnpj);
-    if (existing?.importado) setAlreadyImported(true);
+      const result = await searchCNPJ(cnpj);
+      if (!result) return;
 
-    const result = await searchCNPJ(cnpj);
-    if (!result) return;
+      const { error: insertError } = await supabase.from('cnpj_consultas').insert([{
+        cnpj,
+        razao_social: result.razao_social,
+        nome_fantasia: result.nome_fantasia,
+        cnae_codigo: String(result.cnae_fiscal),
+        cnae_descricao: result.cnae_fiscal_descricao,
+        logradouro: `${result.logradouro}${result.numero ? ', ' + result.numero : ''}`,
+        cidade: result.municipio,
+        estado: result.uf,
+        telefone: normalizePhone(result.ddd_telefone_1 || result.ddd_telefone_2),
+        email: result.email,
+        dados_completos: JSON.parse(JSON.stringify(result)),
+        consultado_por: profile.id,
+      }]);
+      if (insertError) throw insertError;
 
-    await supabase.from('cnpj_consultas').insert([{
-      cnpj,
-      razao_social: result.razao_social,
-      nome_fantasia: result.nome_fantasia,
-      cnae_codigo: String(result.cnae_fiscal),
-      cnae_descricao: result.cnae_fiscal_descricao,
-      logradouro: `${result.logradouro}${result.numero ? ', ' + result.numero : ''}`,
-      cidade: result.municipio,
-      estado: result.uf,
-      telefone: normalizePhone(result.ddd_telefone_1 || result.ddd_telefone_2),
-      email: result.email,
-      dados_completos: JSON.parse(JSON.stringify(result)),
-      consultado_por: profile.id,
-    }]);
+      const { data: existingLead } = await supabase.from('leads').select('id').eq('cnpj', cnpj).maybeSingle();
+      if (existingLead) setAlreadyImported(true);
 
-    const { data: existingLead } = await supabase.from('leads').select('id').eq('cnpj', cnpj).maybeSingle();
-    if (existingLead) setAlreadyImported(true);
-
-    loadConsultas();
+      loadConsultas();
+    } catch (e) {
+      console.error('Error searching CNPJ:', e);
+      toast.error('Erro ao consultar CNPJ', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
+    }
   };
 
   const handleImport = async () => {
@@ -165,8 +176,8 @@ export default function Prospeccao() {
     const phone = normalizePhone(company.ddd_telefone_1 || company.ddd_telefone_2);
     if (!phone) return;
     const nome = company.nome_fantasia || company.razao_social;
-    const cidade = (company as any).municipio || '';
-    const segmento = (company as any).cnae_fiscal_descricao || '';
+    const cidade = company.municipio || '';
+    const segmento = company.cnae_fiscal_descricao || '';
     let body: string;
     try {
       const script = await getDefaultScript('whatsapp');
@@ -182,23 +193,29 @@ export default function Prospeccao() {
 
   const handleCallMade = async (phone: string) => {
     if (!profile || !company) return;
-    const cnpjClean = company.cnpj.replace(/\D/g, '');
-    const { data } = await supabase.from('leads').select('id').eq('cnpj', cnpjClean).maybeSingle();
-    if (!data?.id) return;
+    try {
+      const cnpjClean = company.cnpj.replace(/\D/g, '');
+      const { data } = await supabase.from('leads').select('id').eq('cnpj', cnpjClean).maybeSingle();
+      if (!data?.id) return;
 
-    await supabase.from('lead_timeline').insert({
-      lead_id: data.id,
-      author_id: profile.id,
-      content: `☎️ Ligação realizada para ${phone}`,
-      contact_type: 'call',
-    });
-    await logLeadActivity({
-      leadId: data.id,
-      userId: profile.id,
-      actionType: 'call_made',
-      description: `Ligação realizada para ${phone}`,
-      metadata: { phone },
-    });
+      const { error } = await supabase.from('lead_timeline').insert({
+        lead_id: data.id,
+        author_id: profile.id,
+        content: `☎️ Ligação realizada para ${phone}`,
+        contact_type: 'call',
+      });
+      if (error) throw error;
+      await logLeadActivity({
+        leadId: data.id,
+        userId: profile.id,
+        actionType: 'call_made',
+        description: `Ligação realizada para ${phone}`,
+        metadata: { phone },
+      });
+    } catch (e) {
+      console.error('Error recording call:', e);
+      toast.error('Erro ao registrar ligação', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
+    }
   };
 
   if (guardLoading) {
