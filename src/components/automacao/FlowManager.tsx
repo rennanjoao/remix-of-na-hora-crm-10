@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import DOMPurify from 'isomorphic-dompurify';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { toast } from 'sonner';
-import { Loader2, Plus, Trash2, Play, Pause, Save } from 'lucide-react';
+import { Loader2, Plus, Trash2, Play, Pause, CheckCircle2, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BlockEditor } from './BlockEditor';
@@ -22,6 +23,7 @@ interface Flow {
   description: string | null;
   type: 'cadence' | 'blast';
   status: string;
+  slug: string | null;
   created_at: string;
 }
 
@@ -40,6 +42,26 @@ interface Props {
   type: 'cadence' | 'blast';
 }
 
+const sanitize = (html: string) => DOMPurify.sanitize(html, {
+  FORBID_TAGS: ['script', 'iframe', 'style', 'object', 'embed', 'form', 'input'],
+  FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
+});
+
+function stepIsFunctional(step: Step | undefined): boolean {
+  if (!step) return false;
+  if (!step.subject.trim()) return false;
+  const plain = (step.body_html || '').replace(/<[^>]+>/g, '').trim();
+  return plain.length > 0;
+}
+
+async function flowRecipientCount(flowId: string): Promise<number> {
+  const { count } = await supabase
+    .from('email_flow_recipients')
+    .select('*', { count: 'exact', head: true })
+    .eq('flow_id', flowId);
+  return count ?? 0;
+}
+
 export function FlowManager({ type }: Props) {
   const { profile } = useAuth();
   const [flows, setFlows] = useState<Flow[]>([]);
@@ -49,6 +71,9 @@ export function FlowManager({ type }: Props) {
   const [selectedFlow, setSelectedFlow] = useState<Flow | null>(null);
   const [steps, setSteps] = useState<Step[]>([]);
   const [editingStep, setEditingStep] = useState<Step | null>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [dirty, setDirty] = useState(false);
+  const autosaveRef = useRef<number | null>(null);
 
   const fetchFlows = useCallback(async () => {
     setLoading(true);
@@ -82,7 +107,6 @@ export function FlowManager({ type }: Props) {
       toast.success('Criado!');
       setCreateOpen(false);
       setNewFlow({ name: '', description: '' });
-      setSelectedFlow(data as Flow);
       fetchFlows();
       openFlow(data as Flow);
     } catch (e) {
@@ -126,12 +150,15 @@ export function FlowManager({ type }: Props) {
       const newStep: Step = { ...(data), blocks: initial } as Step;
       setSteps((prev) => [...prev, newStep]);
       setEditingStep(newStep);
+      setSaveState('saved');
+      setDirty(false);
     } catch (e) {
       toast.error('Erro ao adicionar passo', { description: e instanceof Error ? e.message : String(e) });
     }
   };
 
-  const saveStep = async (step: Step) => {
+  const persistStep = async (step: Step) => {
+    setSaveState('saving');
     try {
       const { error } = await supabase.from('email_flow_steps').update({
         subject: step.subject,
@@ -141,12 +168,35 @@ export function FlowManager({ type }: Props) {
       }).eq('id', step.id);
       if (error) throw error;
       setSteps((prev) => prev.map((s) => (s.id === step.id ? { ...step, body_html: blocksToHtml(step.blocks) } : s)));
-      toast.success('Passo salvo');
-      setEditingStep(null);
+      setSaveState('saved');
+      setDirty(false);
     } catch (e) {
-      toast.error('Erro ao salvar passo', { description: e instanceof Error ? e.message : String(e) });
+      setSaveState('error');
+      toast.error('Falha no autosave', { description: e instanceof Error ? e.message : String(e) });
     }
   };
+
+  // Debounced autosave whenever editingStep changes and is dirty
+  useEffect(() => {
+    if (!editingStep || !dirty) return;
+    if (autosaveRef.current) window.clearTimeout(autosaveRef.current);
+    autosaveRef.current = window.setTimeout(() => {
+      persistStep(editingStep);
+    }, 1500);
+    return () => {
+      if (autosaveRef.current) window.clearTimeout(autosaveRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingStep, dirty]);
+
+  // Warn when trying to close with unsaved changes
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (dirty) { e.preventDefault(); e.returnValue = ''; }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
 
   const deleteFlow = async (id: string) => {
     try {
@@ -161,26 +211,55 @@ export function FlowManager({ type }: Props) {
   };
 
   const toggleStatus = async (flow: Flow) => {
+    if (flow.status !== 'ativa') {
+      // Validate before activating
+      const { data: stepsData } = await supabase.from('email_flow_steps')
+        .select('subject, body_html').eq('flow_id', flow.id);
+      const stepsList = (stepsData ?? []) as { subject: string; body_html: string }[];
+      if (stepsList.length === 0) {
+        toast.error('Não é possível ativar', { description: 'Adicione ao menos um passo com assunto e conteúdo.' });
+        return;
+      }
+      const bad = stepsList.find((s) => !s.subject.trim() || (s.body_html || '').replace(/<[^>]+>/g, '').trim().length === 0);
+      if (bad) {
+        toast.error('Não é possível ativar', { description: 'Todos os passos precisam de assunto e conteúdo.' });
+        return;
+      }
+      if (flow.type === 'blast' && !flow.slug) {
+        const rc = await flowRecipientCount(flow.id);
+        if (rc === 0) {
+          toast.error('Não é possível ativar', { description: 'Adicione destinatários antes de ativar o disparo.' });
+          return;
+        }
+      }
+    }
     const next = flow.status === 'ativa' ? 'pausada' : 'ativa';
     try {
       const { error } = await supabase.from('email_flows').update({ status: next }).eq('id', flow.id);
       if (error) throw error;
       setFlows((prev) => prev.map((f) => (f.id === flow.id ? { ...f, status: next } : f)));
+      toast.success(next === 'ativa' ? 'Fluxo ativo — envios serão processados pelo motor de agendamento' : 'Fluxo pausado');
     } catch (e) {
       toast.error('Erro', { description: e instanceof Error ? e.message : String(e) });
     }
   };
 
-  const badge = (status: string) => {
+  const statusBadge = (f: Flow) => {
     const map: Record<string, { label: string; className: string }> = {
       rascunho: { label: 'Rascunho', className: 'bg-muted text-muted-foreground' },
       ativa: { label: 'Ativa', className: 'bg-success text-success-foreground' },
       pausada: { label: 'Pausada', className: 'bg-secondary text-secondary-foreground' },
       concluida: { label: 'Concluída', className: 'bg-primary/20 text-primary' },
     };
-    const v = map[status] ?? map.rascunho;
+    const v = map[f.status] ?? map.rascunho;
     return <Badge className={v.className}>{v.label}</Badge>;
   };
+
+  const functionalBadge = (functional: boolean) => (
+    functional
+      ? <Badge variant="outline" className="text-xs gap-1 border-success/40 text-success"><CheckCircle2 className="h-3 w-3" />Pronto para envio</Badge>
+      : <Badge variant="outline" className="text-xs gap-1 border-amber-400 text-amber-700"><AlertCircle className="h-3 w-3" />Sem conteúdo ou assunto</Badge>
+  );
 
   if (loading) {
     return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
@@ -202,16 +281,18 @@ export function FlowManager({ type }: Props) {
         {flows.map((f) => (
           <Card key={f.id} className={`cursor-pointer hover:border-primary/50 ${selectedFlow?.id === f.id ? 'border-primary' : ''}`} onClick={() => openFlow(f)}>
             <CardHeader className="pb-2">
-              <div className="flex justify-between items-start">
+              <div className="flex justify-between items-start gap-2">
                 <CardTitle className="text-base">{f.name}</CardTitle>
-                {badge(f.status)}
+                {statusBadge(f)}
               </div>
-              <CardDescription className="line-clamp-2">{f.description || 'Sem descrição'}</CardDescription>
+              <CardDescription className="line-clamp-2">
+                {f.description || (f.slug ? `Gatilho: ${f.slug}` : 'Sem descrição')}
+              </CardDescription>
             </CardHeader>
             <CardContent className="flex justify-between items-center pt-0">
               <p className="text-xs text-muted-foreground">{format(new Date(f.created_at), 'dd/MM/yy', { locale: ptBR })}</p>
               <div className="flex gap-1">
-                <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); toggleStatus(f); }}>
+                <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); toggleStatus(f); }} title={f.status === 'ativa' ? 'Pausar' : 'Ativar'}>
                   {f.status === 'ativa' ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
                 </Button>
                 <Button size="icon" variant="ghost" className="text-destructive" onClick={(e) => { e.stopPropagation(); deleteFlow(f.id); }}>
@@ -231,11 +312,15 @@ export function FlowManager({ type }: Props) {
       {selectedFlow && (
         <Card>
           <CardHeader>
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center gap-3 flex-wrap">
               <div>
-                <CardTitle>{selectedFlow.name}</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  {selectedFlow.name}
+                  {functionalBadge(steps.length > 0 && steps.every(stepIsFunctional))}
+                </CardTitle>
                 <CardDescription>
                   {type === 'cadence' ? 'Configure os passos do fluxo' : 'Configure o e-mail do disparo'}
+                  {selectedFlow.slug && ` · gatilho: ${selectedFlow.slug}`}
                 </CardDescription>
               </div>
               {type === 'cadence' && (
@@ -254,23 +339,24 @@ export function FlowManager({ type }: Props) {
                 {steps.map((step) => (
                   <AccordionItem key={step.id} value={step.id}>
                     <AccordionTrigger>
-                      <div className="flex items-center gap-3 text-left">
+                      <div className="flex items-center gap-3 text-left w-full pr-2">
                         <div className="h-7 w-7 rounded-full bg-primary text-primary-foreground text-sm flex items-center justify-center font-bold">
                           {step.order_index}
                         </div>
-                        <div>
+                        <div className="flex-1">
                           <p className="font-medium text-sm">{step.subject || '(sem assunto)'}</p>
                           <p className="text-xs text-muted-foreground">
                             {step.delay_days > 0 ? `Aguardar ${step.delay_days} dia(s)` : 'Enviar imediatamente'}
                           </p>
                         </div>
+                        {functionalBadge(stepIsFunctional(step))}
                       </div>
                     </AccordionTrigger>
                     <AccordionContent>
                       <div className="flex justify-end gap-2 mb-2">
-                        <Button size="sm" variant="outline" onClick={() => setEditingStep(step)}>Editar</Button>
+                        <Button size="sm" variant="outline" onClick={() => { setEditingStep(step); setDirty(false); setSaveState('idle'); }}>Editar</Button>
                       </div>
-                      <div className="rounded-md border p-4 bg-white" dangerouslySetInnerHTML={{ __html: step.body_html }} />
+                      <div className="rounded-md border p-4 bg-white" dangerouslySetInnerHTML={{ __html: sanitize(step.body_html) }} />
                     </AccordionContent>
                   </AccordionItem>
                 ))}
@@ -296,19 +382,29 @@ export function FlowManager({ type }: Props) {
       </Dialog>
 
       {/* Step editor */}
-      <Dialog open={!!editingStep} onOpenChange={(o) => !o && setEditingStep(null)}>
+      <Dialog open={!!editingStep} onOpenChange={(o) => {
+        if (!o) {
+          if (dirty && editingStep) {
+            // flush pending autosave
+            persistStep(editingStep);
+          }
+          setEditingStep(null);
+        }
+      }}>
         <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editor de e-mail</DialogTitle>
-            <DialogDescription>Arraste blocos, edite inline, e veja a prévia à direita.</DialogDescription>
+            <DialogDescription>Arraste blocos, edite inline, use variáveis e envie um teste antes de ativar. Autosave em ~1,5s.</DialogDescription>
           </DialogHeader>
           {editingStep && (
             <>
               <BlockEditor
                 blocks={editingStep.blocks}
                 subject={editingStep.subject}
-                onChange={(blocks) => setEditingStep({ ...editingStep, blocks })}
-                onSubjectChange={(subject) => setEditingStep({ ...editingStep, subject })}
+                saveState={saveState}
+                dirty={dirty}
+                onChange={(blocks) => { setEditingStep({ ...editingStep, blocks }); setDirty(true); setSaveState('idle'); }}
+                onSubjectChange={(subject) => { setEditingStep({ ...editingStep, subject }); setDirty(true); setSaveState('idle'); }}
               />
               <div className="flex justify-between items-center mt-4">
                 <div className="flex items-center gap-2">
@@ -318,11 +414,12 @@ export function FlowManager({ type }: Props) {
                     min={0}
                     className="w-24"
                     value={editingStep.delay_days}
-                    onChange={(e) => setEditingStep({ ...editingStep, delay_days: parseInt(e.target.value) || 0 })}
+                    onChange={(e) => { setEditingStep({ ...editingStep, delay_days: parseInt(e.target.value) || 0 }); setDirty(true); }}
                   />
                 </div>
-                <Button onClick={() => saveStep(editingStep)}>
-                  <Save className="h-4 w-4 mr-2" />Salvar passo
+                <Button onClick={() => persistStep(editingStep)} disabled={saveState === 'saving'}>
+                  {saveState === 'saving' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                  Salvar agora
                 </Button>
               </div>
             </>

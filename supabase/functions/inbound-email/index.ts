@@ -1,6 +1,21 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { Webhook } from 'https://esm.sh/svix@1.21.0'
 
+// Very basic server-side sanitizer: strip <script>, <style>, <iframe>, event handlers.
+function sanitizeIncomingHtml(html: string | null): string | null {
+  if (!html) return html;
+  let out = html;
+  out = out.replace(/<script[\s\S]*?<\/script>/gi, '');
+  out = out.replace(/<style[\s\S]*?<\/style>/gi, '');
+  out = out.replace(/<iframe[\s\S]*?<\/iframe>/gi, '');
+  out = out.replace(/<object[\s\S]*?<\/object>/gi, '');
+  out = out.replace(/<embed\b[^>]*>/gi, '');
+  out = out.replace(/ on[a-z]+\s*=\s*"[^"]*"/gi, '');
+  out = out.replace(/ on[a-z]+\s*=\s*'[^']*'/gi, '');
+  out = out.replace(/javascript:/gi, '');
+  return out;
+}
+
 // Public endpoint: Resend calls this. No auth header, we verify svix signature.
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
@@ -53,7 +68,7 @@ Deno.serve(async (req) => {
     const fromEmail = fromRaw.match(/<(.+)>/)?.[1] ?? fromRaw.trim()
     const to = Array.isArray(data.to) ? (data.to[0] as string) : (data.to as string | undefined)
     const subject = (data.subject as string) ?? null
-    const html = (data.html as string) ?? null
+    const html = sanitizeIncomingHtml((data.html as string) ?? null)
     const text = (data.text as string) ?? null
     const resendId = (data.email_id as string) ?? (data.id as string) ?? null
 

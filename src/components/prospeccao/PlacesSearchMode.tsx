@@ -352,18 +352,20 @@ export function PlacesSearchMode() {
         metadata: { outcome_id: outcome.id },
       });
 
-      // Cadence triggers
+      // Cadence triggers — surface failures to the SDR instead of swallowing them
+      const runEnroll = async (slug: string, successMsg: string) => {
+        const r = await enrollLeadInCampaign(leadId, slug, profile.id);
+        if (r.enrolled) toast.success(successMsg);
+        else if (r.reason && r.reason !== 'Já inscrito') {
+          toast.error(`Falha ao iniciar cadência "${slug}"`, { description: r.reason });
+        }
+      };
       if (outcome.id === 'pediu_apresentacao') {
-        const r = await enrollLeadInCampaign(leadId, 'apresentacao-institucional', profile.id);
-        if (r.enrolled) toast.success('Cadência "Apresentação institucional" iniciada');
-        else if (r.reason && r.reason !== 'Already enrolled') console.warn('enroll skipped:', r.reason);
+        await runEnroll('apresentacao-institucional', 'Cadência "Apresentação institucional" iniciada');
       } else if (outcome.id === 'sem_resposta') {
-        const r = await enrollLeadInCampaign(leadId, 'recaptura-pos-silencio', profile.id);
-        if (r.enrolled) toast.success('Cadência "Recaptura" iniciada');
+        await runEnroll('recaptura-pos-silencio', 'Cadência "Recaptura" iniciada');
       } else if (outcome.id === 'frota_propria') {
-        const r = await enrollLeadInCampaign(leadId, 'objeccao-frota-propria', profile.id);
-        if (r.enrolled) toast.success('Cadência "Objeção frota própria" iniciada (retorno em ~45 dias)');
-        else if (r.reason && r.reason !== 'Already enrolled') console.warn('enroll skipped:', r.reason);
+        await runEnroll('objeccao-frota-propria', 'Cadência "Objeção frota própria" iniciada (retorno em ~45 dias)');
       }
 
       if (outcome.is_suppressed) {

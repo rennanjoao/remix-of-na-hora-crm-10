@@ -17,7 +17,7 @@ interface Template {
   id: string;
   subject: string;
   body_html: string;
-  campaign_name: string;
+  flow_name: string;
 }
 
 export interface BulkEmailTarget {
@@ -64,20 +64,24 @@ export function BulkEmailModal({ open, onOpenChange, targets, onEnsureLead }: Pr
     if (!open) return;
     (async () => {
       setLoading(true);
-      const { data: campaigns } = await supabase.from('email_campaigns').select('id, name').eq('status', 'ativa');
-      if (!campaigns) { setLoading(false); return; }
-      const ids = campaigns.map((c) => c.id);
+      const { data: flows } = await supabase
+        .from('email_flows')
+        .select('id, name')
+        .eq('type', 'cadence')
+        .eq('status', 'ativa');
+      if (!flows) { setLoading(false); return; }
+      const ids = flows.map((f) => f.id);
       if (ids.length === 0) { setTemplates([]); setLoading(false); return; }
-      const { data: steps } = await supabase.from('email_steps')
-        .select('id, subject, body_html, campaign_id, step_order')
-        .in('campaign_id', ids)
-        .order('step_order');
-      const byCamp = new Map(campaigns.map((c) => [c.id, c.name]));
+      const { data: steps } = await supabase.from('email_flow_steps')
+        .select('id, subject, body_html, flow_id, order_index')
+        .in('flow_id', ids)
+        .order('order_index');
+      const byFlow = new Map(flows.map((f) => [f.id, f.name]));
       const list: Template[] = (steps ?? []).map((s) => ({
         id: s.id,
         subject: s.subject,
         body_html: s.body_html,
-        campaign_name: `${byCamp.get(s.campaign_id) ?? '—'} · Passo ${s.step_order}`,
+        flow_name: `${byFlow.get(s.flow_id) ?? '—'} · Passo ${s.order_index}`,
       }));
       setTemplates(list);
       setLoading(false);
@@ -91,7 +95,8 @@ export function BulkEmailModal({ open, onOpenChange, targets, onEnsureLead }: Pr
     if (t) { setSubject(t.subject); setBodyHtml(t.body_html); }
   };
 
-  const saveList = async (): Promise<string | null> => {
+  /** Creates a blast flow + single step + recipients. Returns flow id or null. */
+  const saveList = async (): Promise<{ flowId: string; stepId: string } | null> => {
     if (!profile) return null;
     const leadIds: string[] = [];
     for (const t of withEmail) {
@@ -99,28 +104,44 @@ export function BulkEmailModal({ open, onOpenChange, targets, onEnsureLead }: Pr
       if (!id) id = await onEnsureLead(t.place_id);
       if (id) leadIds.push(id);
     }
-    const { data, error } = await supabase.from('email_blast_lists')
+    const { data: flow, error: fErr } = await supabase.from('email_flows')
       .insert({
         name: listName || 'Disparo sem nome',
-        subject,
-        body_html: bodyHtml,
-        template_step_id: templateId || null,
-        lead_ids: leadIds,
+        type: 'blast',
         status: 'rascunho',
         created_by: profile.id,
       })
       .select('id')
       .single();
-    if (error) { toast.error('Falha ao salvar lista'); console.error(error); return null; }
-    return data?.id ?? null;
+    if (fErr || !flow) { toast.error('Falha ao salvar disparo'); console.error(fErr); return null; }
+
+    const { data: step, error: sErr } = await supabase.from('email_flow_steps')
+      .insert({
+        flow_id: flow.id,
+        order_index: 1,
+        name: 'Disparo',
+        subject,
+        blocks: [],
+        body_html: bodyHtml,
+        delay_days: 0,
+      })
+      .select('id')
+      .single();
+    if (sErr || !step) { toast.error('Falha ao salvar passo'); console.error(sErr); return null; }
+
+    if (leadIds.length > 0) {
+      const rows = leadIds.map((lead_id) => ({ flow_id: flow.id, lead_id, status: 'pending' }));
+      await supabase.from('email_flow_recipients').insert(rows);
+    }
+    return { flowId: flow.id, stepId: step.id };
   };
 
   const handleSaveOnly = async () => {
     if (!subject || !bodyHtml) { toast.error('Assunto e corpo obrigatórios'); return; }
     setSending(true);
-    const id = await saveList();
+    const res = await saveList();
     setSending(false);
-    if (id) { toast.success('Lista de disparo salva'); onOpenChange(false); }
+    if (res) { toast.success('Disparo salvo'); onOpenChange(false); }
   };
 
   const handleSend = async () => {
@@ -128,7 +149,8 @@ export function BulkEmailModal({ open, onOpenChange, targets, onEnsureLead }: Pr
     if (!subject || !bodyHtml) { toast.error('Assunto e corpo obrigatórios'); return; }
     if (withEmail.length === 0) { toast.error('Nenhum lead com e-mail'); return; }
     setSending(true);
-    const listId = await saveList();
+    const saved = await saveList();
+    if (!saved) { setSending(false); return; }
     setProgress({ done: 0, total: withEmail.length });
     let ok = 0, err = 0;
     for (let i = 0; i < withEmail.length; i++) {
@@ -143,6 +165,8 @@ export function BulkEmailModal({ open, onOpenChange, targets, onEnsureLead }: Pr
             to_email: t.email,
             subject,
             body_html: bodyHtml,
+            flow_id: saved.flowId,
+            flow_step_id: saved.stepId,
           },
         });
         if (error) throw error;
@@ -152,18 +176,16 @@ export function BulkEmailModal({ open, onOpenChange, targets, onEnsureLead }: Pr
           userId: profile.id,
           actionType: 'email_sent',
           description: `E-mail em massa: ${subject}`,
-          metadata: { blast_list_id: listId, to: t.email },
+          metadata: { flow_id: saved.flowId, to: t.email },
         });
       } catch (e) {
         console.error('bulk-send', e); err++;
       }
       setProgress({ done: i + 1, total: withEmail.length });
     }
-    if (listId) {
-      await supabase.from('email_blast_lists')
-        .update({ status: 'enviado', sent_count: ok, error_count: err })
-        .eq('id', listId);
-    }
+    await supabase.from('email_flows')
+      .update({ status: 'concluida' })
+      .eq('id', saved.flowId);
     setSending(false); setProgress(null);
     toast.success(`Disparo concluído: ${ok} enviados, ${err} falhas`);
     onOpenChange(false);
@@ -198,13 +220,13 @@ export function BulkEmailModal({ open, onOpenChange, targets, onEnsureLead }: Pr
               </SelectTrigger>
               <SelectContent>
                 {templates.map(t => (
-                  <SelectItem key={t.id} value={t.id}>{t.campaign_name} — {t.subject}</SelectItem>
+                  <SelectItem key={t.id} value={t.id}>{t.flow_name} — {t.subject}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label>Nome da lista (interno)</Label>
+            <Label>Nome do disparo (interno)</Label>
             <Input value={listName} onChange={(e) => setListName(e.target.value)} />
           </div>
           <div>
@@ -212,8 +234,8 @@ export function BulkEmailModal({ open, onOpenChange, targets, onEnsureLead }: Pr
             <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Assunto do e-mail" />
           </div>
           <div>
-            <Label>Corpo (HTML)</Label>
-            <Textarea value={bodyHtml} onChange={(e) => setBodyHtml(e.target.value)} rows={10} placeholder="<p>Olá {{nome}}, ...</p>" />
+            <Label>Corpo (HTML) — use {'{{lead.nome}}'}, {'{{lead.empresa}}'}, {'{{lead.cidade}}'}</Label>
+            <Textarea value={bodyHtml} onChange={(e) => setBodyHtml(e.target.value)} rows={10} placeholder="<p>Olá {{lead.nome}}, ...</p>" />
           </div>
         </div>
 

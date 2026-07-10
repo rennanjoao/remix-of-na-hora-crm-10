@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
     // Update open count
     const { data: send, error: fetchError } = await supabase
       .from('email_sends')
-      .select('id, open_count, lead_id, campaign_id')
+      .select('id, open_count, lead_id, flow_id')
       .eq('tracking_id', trackingId)
       .maybeSingle();
 

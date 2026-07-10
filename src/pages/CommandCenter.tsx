@@ -24,7 +24,7 @@ interface FeedEvent {
 
 interface LeadRow { id: string; company_name?: string | null; city?: string | null; category?: string | null; assigned_to?: string | null; created_by?: string | null; status?: string | null; contact_outcome?: string | null; created_at?: string | null; }
 interface LeadTimelineRow { id: string; contact_type?: string | null; notes?: string | null; description?: string | null; created_at?: string | null; }
-interface EmailSendRow { id: string; subject?: string | null; recipient_email?: string | null; sdr_id?: string | null; created_at?: string | null; }
+interface EmailSendRow { id: string; subject?: string | null; to_email?: string | null; sdr_id?: string | null; created_at?: string | null; }
 interface MeetingRow { id: string; title?: string | null; start_time?: string | null; sdr_id?: string | null; created_at?: string | null; }
 
 interface SdrPerfRow {
@@ -132,7 +132,7 @@ export default function CommandCenter() {
           id: `em-${row.id}`,
           kind: 'email',
           title: row.subject ?? 'E-mail',
-          detail: row.recipient_email ?? '',
+          detail: row.to_email ?? '',
           sdrName,
           at: row.created_at ?? new Date().toISOString(),
         });

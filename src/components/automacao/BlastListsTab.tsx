@@ -129,7 +129,6 @@ export function BlastListsTab() {
     if (!targetFlow || selected.size === 0 || !profile) return;
     setSending(true);
     try {
-      // Fetch step to send
       const { data: steps, error: sErr } = await supabase.from('email_flow_steps')
         .select('id, subject, body_html').eq('flow_id', targetFlow).order('order_index').limit(1);
       if (sErr) throw sErr;
@@ -139,11 +138,23 @@ export function BlastListsTab() {
         return;
       }
       const targets = leads.filter((l) => selected.has(l.id) && l.email);
+
+      // Ensure a recipient row exists per lead so status is tracked
+      const rows = targets.map((l) => ({ flow_id: targetFlow, lead_id: l.id, status: 'pending' }));
+      await supabase.from('email_flow_recipients').upsert(rows, { onConflict: 'flow_id,lead_id' });
+      const { data: recData } = await supabase.from('email_flow_recipients')
+        .select('id, lead_id').eq('flow_id', targetFlow)
+        .in('lead_id', targets.map((t) => t.id));
+      const recMap = new Map((recData ?? []).map((r) => [r.lead_id, r.id]));
+
       let ok = 0, fail = 0;
       for (const lead of targets) {
         try {
-          const { error } = await supabase.functions.invoke('send-email', {
+          const { data, error } = await supabase.functions.invoke('send-email', {
             body: {
+              flow_id: targetFlow,
+              flow_step_id: step.id,
+              recipient_id: recMap.get(lead.id) ?? null,
               lead_id: lead.id,
               sdr_id: profile.id,
               to_email: lead.email,
@@ -152,6 +163,8 @@ export function BlastListsTab() {
             },
           });
           if (error) throw error;
+          const payload = data as { success?: boolean; error?: string } | null;
+          if (payload && payload.success === false) throw new Error(payload.error ?? 'erro');
           ok++;
         } catch { fail++; }
       }

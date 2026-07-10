@@ -148,106 +148,6 @@ export type Database = {
           },
         ]
       }
-      email_blast_lists: {
-        Row: {
-          body_html: string
-          created_at: string
-          created_by: string
-          error_count: number
-          id: string
-          lead_ids: string[]
-          name: string
-          sent_count: number
-          status: string
-          subject: string
-          template_step_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          body_html: string
-          created_at?: string
-          created_by: string
-          error_count?: number
-          id?: string
-          lead_ids?: string[]
-          name: string
-          sent_count?: number
-          status?: string
-          subject: string
-          template_step_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          body_html?: string
-          created_at?: string
-          created_by?: string
-          error_count?: number
-          id?: string
-          lead_ids?: string[]
-          name?: string
-          sent_count?: number
-          status?: string
-          subject?: string
-          template_step_id?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "email_blast_lists_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "email_blast_lists_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "sdr_performance_daily"
-            referencedColumns: ["sdr_id"]
-          },
-          {
-            foreignKeyName: "email_blast_lists_template_step_id_fkey"
-            columns: ["template_step_id"]
-            isOneToOne: false
-            referencedRelation: "email_steps"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      email_campaigns: {
-        Row: {
-          created_at: string
-          created_by: string
-          description: string | null
-          id: string
-          name: string
-          slug: string | null
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          created_by: string
-          description?: string | null
-          id?: string
-          name: string
-          slug?: string | null
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string
-          description?: string | null
-          id?: string
-          name?: string
-          slug?: string | null
-          status?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       email_domains: {
         Row: {
           created_at: string
@@ -293,26 +193,48 @@ export type Database = {
       email_flow_recipients: {
         Row: {
           added_at: string
+          current_step_id: string | null
+          error: string | null
           flow_id: string
           id: string
           lead_id: string
+          sent_at: string | null
           status: string
+          unsubscribed_at: string | null
+          updated_at: string
         }
         Insert: {
           added_at?: string
+          current_step_id?: string | null
+          error?: string | null
           flow_id: string
           id?: string
           lead_id: string
+          sent_at?: string | null
           status?: string
+          unsubscribed_at?: string | null
+          updated_at?: string
         }
         Update: {
           added_at?: string
+          current_step_id?: string | null
+          error?: string | null
           flow_id?: string
           id?: string
           lead_id?: string
+          sent_at?: string | null
           status?: string
+          unsubscribed_at?: string | null
+          updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "email_flow_recipients_current_step_id_fkey"
+            columns: ["current_step_id"]
+            isOneToOne: false
+            referencedRelation: "email_flow_steps"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "email_flow_recipients_flow_id_fkey"
             columns: ["flow_id"]
@@ -379,30 +301,33 @@ export type Database = {
       email_flows: {
         Row: {
           created_at: string
-          created_by: string
+          created_by: string | null
           description: string | null
           id: string
           name: string
+          slug: string | null
           status: string
           type: string
           updated_at: string
         }
         Insert: {
           created_at?: string
-          created_by: string
+          created_by?: string | null
           description?: string | null
           id?: string
           name: string
+          slug?: string | null
           status?: string
           type?: string
           updated_at?: string
         }
         Update: {
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           description?: string | null
           id?: string
           name?: string
+          slug?: string | null
           status?: string
           type?: string
           updated_at?: string
@@ -479,59 +404,87 @@ export type Database = {
       }
       email_sends: {
         Row: {
-          campaign_id: string
+          attempts: number
+          body_html: string | null
           created_at: string
+          flow_id: string | null
+          flow_step_id: string | null
           id: string
+          last_error: string | null
           last_opened_at: string | null
           lead_id: string
           open_count: number
+          recipient_id: string | null
           replied: boolean
           replied_at: string | null
           scheduled_for: string | null
           sdr_id: string
           sent_at: string | null
           status: string
-          step_id: string
+          subject: string | null
+          to_email: string | null
           tracking_id: string
+          unsubscribe_token: string | null
         }
         Insert: {
-          campaign_id: string
+          attempts?: number
+          body_html?: string | null
           created_at?: string
+          flow_id?: string | null
+          flow_step_id?: string | null
           id?: string
+          last_error?: string | null
           last_opened_at?: string | null
           lead_id: string
           open_count?: number
+          recipient_id?: string | null
           replied?: boolean
           replied_at?: string | null
           scheduled_for?: string | null
           sdr_id: string
           sent_at?: string | null
           status?: string
-          step_id: string
+          subject?: string | null
+          to_email?: string | null
           tracking_id?: string
+          unsubscribe_token?: string | null
         }
         Update: {
-          campaign_id?: string
+          attempts?: number
+          body_html?: string | null
           created_at?: string
+          flow_id?: string | null
+          flow_step_id?: string | null
           id?: string
+          last_error?: string | null
           last_opened_at?: string | null
           lead_id?: string
           open_count?: number
+          recipient_id?: string | null
           replied?: boolean
           replied_at?: string | null
           scheduled_for?: string | null
           sdr_id?: string
           sent_at?: string | null
           status?: string
-          step_id?: string
+          subject?: string | null
+          to_email?: string | null
           tracking_id?: string
+          unsubscribe_token?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "email_sends_campaign_id_fkey"
-            columns: ["campaign_id"]
+            foreignKeyName: "email_sends_flow_id_fkey"
+            columns: ["flow_id"]
             isOneToOne: false
-            referencedRelation: "email_campaigns"
+            referencedRelation: "email_flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_sends_flow_step_id_fkey"
+            columns: ["flow_step_id"]
+            isOneToOne: false
+            referencedRelation: "email_flow_steps"
             referencedColumns: ["id"]
           },
           {
@@ -542,67 +495,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "email_sends_step_id_fkey"
-            columns: ["step_id"]
+            foreignKeyName: "email_sends_recipient_id_fkey"
+            columns: ["recipient_id"]
             isOneToOne: false
-            referencedRelation: "email_steps"
+            referencedRelation: "email_flow_recipients"
             referencedColumns: ["id"]
           },
         ]
       }
-      email_steps: {
+      email_unsubscribe_tokens: {
         Row: {
-          body_html: string
-          campaign_id: string
-          condition_ref_step_id: string | null
-          condition_type: string | null
           created_at: string
-          delay_days: number
-          id: string
-          step_order: number
-          step_type: string
-          subject: string
-          updated_at: string
+          email: string
+          lead_id: string | null
+          token: string
+          used_at: string | null
         }
         Insert: {
-          body_html: string
-          campaign_id: string
-          condition_ref_step_id?: string | null
-          condition_type?: string | null
           created_at?: string
-          delay_days?: number
-          id?: string
-          step_order?: number
-          step_type?: string
-          subject: string
-          updated_at?: string
+          email: string
+          lead_id?: string | null
+          token?: string
+          used_at?: string | null
         }
         Update: {
-          body_html?: string
-          campaign_id?: string
-          condition_ref_step_id?: string | null
-          condition_type?: string | null
           created_at?: string
-          delay_days?: number
-          id?: string
-          step_order?: number
-          step_type?: string
-          subject?: string
-          updated_at?: string
+          email?: string
+          lead_id?: string | null
+          token?: string
+          used_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "email_steps_campaign_id_fkey"
-            columns: ["campaign_id"]
+            foreignKeyName: "email_unsubscribe_tokens_lead_id_fkey"
+            columns: ["lead_id"]
             isOneToOne: false
-            referencedRelation: "email_campaigns"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "email_steps_condition_ref_step_id_fkey"
-            columns: ["condition_ref_step_id"]
-            isOneToOne: false
-            referencedRelation: "email_steps"
+            referencedRelation: "leads"
             referencedColumns: ["id"]
           },
         ]
@@ -986,6 +914,27 @@ export type Database = {
           phone?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      suppressed_emails: {
+        Row: {
+          email: string
+          id: string
+          reason: string
+          suppressed_at: string
+        }
+        Insert: {
+          email: string
+          id?: string
+          reason?: string
+          suppressed_at?: string
+        }
+        Update: {
+          email?: string
+          id?: string
+          reason?: string
+          suppressed_at?: string
         }
         Relationships: []
       }

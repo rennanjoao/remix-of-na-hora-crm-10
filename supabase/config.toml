@@ -2,3 +2,12 @@ project_id = "cyekmwsgpcxjakpbeyea"
 
 [functions.inbound-email]
 verify_jwt = false
+
+[functions.handle-unsubscribe]
+verify_jwt = false
+
+[functions.process-email-flows]
+verify_jwt = false
+
+[functions.track-email]
+verify_jwt = false
