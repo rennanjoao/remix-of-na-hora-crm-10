@@ -1,4 +1,6 @@
 // Email block types and HTML generator
+import DOMPurify from 'isomorphic-dompurify';
+import { renderVariables, type EmailVariableContext } from './email-variables';
 
 export type EmailBlock =
   | { id: string; type: 'text'; html: string }
@@ -20,30 +22,39 @@ export const BLOCK_LABELS: Record<EmailBlock['type'], string> = {
 const escape = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-const wrapCenter = (align: string | undefined, content: string) =>
+/** Sanitize HTML from the text editor before injecting anywhere. */
+export function sanitizeHtml(html: string): string {
+  return DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true },
+    ALLOWED_ATTR: ['href', 'target', 'rel', 'style', 'src', 'alt', 'width', 'height'],
+    FORBID_TAGS: ['script', 'iframe', 'style', 'object', 'embed', 'form', 'input'],
+  });
+}
+
+const wrapAlign = (align: string | undefined, content: string) =>
   `<div style="text-align:${align ?? 'left'};margin:16px 0;">${content}</div>`;
 
 export function blockToHtml(b: EmailBlock): string {
   switch (b.type) {
     case 'text':
-      return `<div style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.55;color:#0f172a;margin:12px 0;">${b.html || ''}</div>`;
+      return `<div style="font-family:Inter,Arial,sans-serif;font-size:15px;line-height:1.55;color:#0f172a;margin:12px 0;">${sanitizeHtml(b.html || '')}</div>`;
     case 'image': {
       const w = b.width ? `width="${b.width}"` : '';
       const img = `<img src="${escape(b.url)}" alt="${escape(b.alt ?? '')}" ${w} style="max-width:100%;height:auto;border-radius:8px;display:inline-block;" />`;
-      return wrapCenter(b.align, img);
+      return wrapAlign(b.align, img);
     }
     case 'button': {
       const bg = b.color ?? '#0f766e';
       const fg = b.textColor ?? '#ffffff';
       const btn = `<a href="${escape(b.url)}" style="display:inline-block;background:${bg};color:${fg};padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-family:Inter,Arial,sans-serif;font-size:14px;">${escape(b.label)}</a>`;
-      return wrapCenter(b.align, btn);
+      return wrapAlign(b.align, btn);
     }
     case 'whatsapp': {
       const phone = b.phone.replace(/\D/g, '');
       const url = `https://wa.me/${phone}?text=${encodeURIComponent(b.message)}`;
       const bg = b.color ?? '#25D366';
       const btn = `<a href="${url}" style="display:inline-block;background:${bg};color:#ffffff;padding:12px 22px;border-radius:999px;text-decoration:none;font-weight:600;font-family:Inter,Arial,sans-serif;font-size:14px;">💬 ${escape(b.label)}</a>`;
-      return wrapCenter('center', btn);
+      return wrapAlign('center', btn);
     }
     case 'signature': {
       const links: string[] = [];
@@ -75,11 +86,24 @@ export function blocksToHtml(blocks: EmailBlock[]): string {
   return `<div style="max-width:600px;margin:0 auto;padding:24px;background:#ffffff;">${body}</div>`;
 }
 
+/**
+ * Renders blocks with variable substitution (for preview / test send).
+ * The server-side sender does the final substitution against the real lead.
+ */
+export function blocksToRenderedHtml(
+  blocks: EmailBlock[],
+  ctx: EmailVariableContext,
+  opts: { previewMode?: boolean } = {},
+): string {
+  const html = blocksToHtml(blocks);
+  return renderVariables(html, ctx, opts);
+}
+
 export function defaultBlockFor(type: EmailBlock['type']): EmailBlock {
   const id = crypto.randomUUID();
   switch (type) {
     case 'text':
-      return { id, type: 'text', html: '<p>Escreva seu texto aqui...</p>' };
+      return { id, type: 'text', html: '<p>Escreva seu texto aqui... Use {{lead.nome}} para personalizar.</p>' };
     case 'image':
       return { id, type: 'image', url: 'https://placehold.co/600x300', alt: '', width: 600, align: 'center' };
     case 'button':
@@ -91,4 +115,9 @@ export function defaultBlockFor(type: EmailBlock['type']): EmailBlock {
     case 'divider':
       return { id, type: 'divider', color: '#e2e8f0' };
   }
+}
+
+/** Deep-clone a block and assign a fresh id — used by the editor's Duplicate action. */
+export function duplicateBlock(b: EmailBlock): EmailBlock {
+  return { ...b, id: crypto.randomUUID() } as EmailBlock;
 }
