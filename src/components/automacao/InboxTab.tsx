@@ -207,7 +207,7 @@ export function InboxTab() {
                       </span>
                     </div>
                     {it.subject && <p className="font-medium text-sm mb-2">{it.subject}</p>}
-                    <div className="prose prose-sm max-w-none text-sm" dangerouslySetInnerHTML={{ __html: it.html ?? '' }} />
+                    <div className="prose prose-sm max-w-none text-sm" dangerouslySetInnerHTML={{ __html: sanitize(it.html ?? '') }} />
                   </div>
                 ));
               })()}
