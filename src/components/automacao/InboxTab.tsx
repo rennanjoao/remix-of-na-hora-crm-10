@@ -65,35 +65,36 @@ export function InboxTab() {
           (leadData ?? []).forEach((l) => { map[l.id] = l as LeadRef; });
           setLeads(map);
 
-          // Fetch sends for these leads to build thread
+          // Fetch sends for these leads to build thread. email_sends now stores
+          // subject/body_html directly; fall back to email_flow_steps for legacy rows.
           const { data: sendData } = await supabase
             .from('email_sends')
-            .select('id, lead_id, sent_at, step_id')
+            .select('id, lead_id, sent_at, subject, body_html, flow_step_id')
             .in('lead_id', leadIds)
             .order('sent_at', { ascending: false });
-          const stepIds = Array.from(new Set((sendData ?? []).map((s) => s.step_id).filter(Boolean))) as string[];
+          const missingStepIds = Array.from(new Set(
+            (sendData ?? [])
+              .filter((s) => !s.subject && s.flow_step_id)
+              .map((s) => s.flow_step_id as string),
+          ));
           const stepMap: Record<string, { subject: string; body_html: string }> = {};
-          if (stepIds.length) {
-            const { data: stepData } = await supabase
-              .from('email_steps')
-              .select('id, subject, body_html')
-              .in('id', stepIds);
-            (stepData ?? []).forEach((s) => { stepMap[s.id] = { subject: s.subject, body_html: s.body_html }; });
-            // Also try new flow steps if any
+          if (missingStepIds.length) {
             const { data: flowStepData } = await supabase
               .from('email_flow_steps')
               .select('id, subject, body_html')
-              .in('id', stepIds);
+              .in('id', missingStepIds);
             (flowStepData ?? []).forEach((s) => { stepMap[s.id] = { subject: s.subject, body_html: s.body_html }; });
           }
           const grouped: Record<string, SendRow[]> = {};
           (sendData ?? []).forEach((s) => {
-            const step = stepMap[s.step_id];
-            const row: SendRow = {
-              id: s.id, lead_id: s.lead_id, sent_at: s.sent_at,
-              subject: step?.subject ?? null, body_html: step?.body_html ?? null,
-            };
-            (grouped[s.lead_id] ??= []).push(row);
+            const fallback = s.flow_step_id ? stepMap[s.flow_step_id] : undefined;
+            (grouped[s.lead_id] ??= []).push({
+              id: s.id,
+              lead_id: s.lead_id,
+              sent_at: s.sent_at,
+              subject: s.subject ?? fallback?.subject ?? null,
+              body_html: s.body_html ?? fallback?.body_html ?? null,
+            });
           });
           setSends(grouped);
         }
