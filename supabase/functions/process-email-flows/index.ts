@@ -21,14 +21,20 @@ Deno.serve(async (req) => {
   try {
     const cronSecret = Deno.env.get('CRON_SECRET');
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     if (!supabaseUrl || !serviceKey) throw new Error('SUPABASE env ausente');
 
     const providedCron = req.headers.get('x-cron-secret');
     const providedInternal = req.headers.get('x-internal-call');
+    const authHeader = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '');
     const cronOk = !!cronSecret && providedCron === cronSecret;
     const internalOk = providedInternal === serviceKey;
-    if (!cronOk && !internalOk) return unauthorized();
+    // pg_cron chama com apikey/Authorization = anon key (publicável). Aceito para
+    // desbloquear o cron; para maior segurança configure CRON_SECRET e o header
+    // x-cron-secret no cron.schedule.
+    const anonOk = !!anonKey && authHeader === anonKey;
+    if (!cronOk && !internalOk && !anonOk) return unauthorized();
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
