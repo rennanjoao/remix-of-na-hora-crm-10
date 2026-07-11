@@ -7,7 +7,7 @@ interface Payload {
   sdr_id: string;
   title: string;
   description?: string;
-  start_time: string; // ISO
+  start_time: string;
   duration_minutes: number;
   contact_name?: string;
   decisor_email?: string;
@@ -89,6 +89,7 @@ Deno.serve(async (req) => {
 
   const auth = await requireAuthenticatedUser(req, corsHeaders);
   if (!auth.ok) return auth.response!;
+  const userId = auth.userId!;
 
   try {
     const payload = (await req.json()) as Payload;
@@ -104,12 +105,48 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const { data: lead } = await supabase
+    // --- Autorização: valida que sdr_id é do próprio usuário, exceto admin/gerente.
+    const { data: myProfile } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!myProfile) {
+      return new Response(JSON.stringify({ error: "profile not found" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { data: roleRow } = await supabase
+      .from("user_roles").select("role").eq("user_id", userId).maybeSingle();
+    const role = roleRow?.role as string | undefined;
+    const canActForOthers = role === "admin" || role === "gerente";
+
+    if (!canActForOthers && payload.sdr_id !== myProfile.id) {
+      return new Response(JSON.stringify({ error: "forbidden: sdr_id mismatch" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Valida que o lead existe (e, se SDR, que está atribuído a ele).
+    const { data: leadCheck } = await supabase
       .from("leads")
-      .select("razao_social, nome_fantasia")
+      .select("id, assigned_to, created_by, razao_social, nome_fantasia")
       .eq("id", payload.lead_id)
       .maybeSingle();
-    const companyName = lead?.nome_fantasia || lead?.razao_social || "empresa";
+    if (!leadCheck) {
+      return new Response(JSON.stringify({ error: "lead not found" }), {
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!canActForOthers) {
+      const owns = leadCheck.assigned_to === myProfile.id || leadCheck.created_by === myProfile.id;
+      if (!owns) {
+        return new Response(JSON.stringify({ error: "forbidden: lead não pertence a você" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+    const companyName = leadCheck.nome_fantasia || leadCheck.razao_social || "empresa";
 
     let meetingLink: string;
     let source: "google_meet" | "jitsi_fallback" = "jitsi_fallback";
@@ -132,7 +169,7 @@ Deno.serve(async (req) => {
       .insert({
         lead_id: payload.lead_id,
         sdr_id: payload.sdr_id,
-        created_by: payload.sdr_id,
+        created_by: myProfile.id,
         title: payload.title,
         description: payload.description || null,
         meeting_date: new Date(payload.start_time).toISOString(),

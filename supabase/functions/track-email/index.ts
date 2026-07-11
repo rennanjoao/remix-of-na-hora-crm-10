@@ -33,7 +33,6 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Update open count
     const { data: send, error: fetchError } = await supabase
       .from('email_sends')
       .select('id, open_count, lead_id, flow_id')
@@ -41,21 +40,31 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (send && !fetchError) {
+      const nextOpenCount = (send.open_count ?? 0) + 1;
+
       await supabase
         .from('email_sends')
         .update({
-          open_count: send.open_count + 1,
+          open_count: nextOpenCount,
           last_opened_at: new Date().toISOString(),
           status: 'aberto',
         })
         .eq('id', send.id);
 
-      // If 5+ opens, move lead to "qualificado" (interested)
-      if (send.open_count + 1 >= 5) {
-        await supabase
-          .from('leads')
-          .update({ status: 'qualificado' })
-          .eq('id', send.lead_id);
+      // Aberturas de e-mail são notoriamente infladas por scanners de segurança
+      // corporativos e pré-carregamento de imagens dos provedores. NÃO promovemos
+      // o lead automaticamente por causa disso — apenas sinalizamos alto
+      // engajamento (>= 5 aberturas) para revisão manual pela equipe.
+      if (nextOpenCount >= 5 && send.lead_id) {
+        try {
+          await supabase
+            .from('leads')
+            .update({ alto_engajamento_email: true })
+            .eq('id', send.lead_id);
+        } catch (e) {
+          // coluna pode não existir em ambientes antigos; ignora silenciosamente
+          console.warn('alto_engajamento_email update skipped:', e);
+        }
       }
     }
 

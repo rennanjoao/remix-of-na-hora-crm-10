@@ -1,17 +1,35 @@
 // Cron-driven processor. Scans email_sends for rows with
 // status='pending' AND scheduled_for <= now, and calls send-email for each.
 // Retries with exponential backoff up to 5 attempts, then marks 'erro' final.
+//
+// Autenticação: só aceita chamadas internas.
+//  - Cron job envia header `x-cron-secret: <CRON_SECRET>`
+//  - Chamadas internas podem usar `x-internal-call: <SERVICE_ROLE_KEY>`
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const MAX_ATTEMPTS = 5;
 const BATCH = 25;
 
-Deno.serve(async (_req) => {
+function unauthorized() {
+  return new Response(JSON.stringify({ error: 'unauthorized' }), {
+    status: 401, headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+Deno.serve(async (req) => {
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const cronSecret = Deno.env.get('CRON_SECRET');
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
     if (!supabaseUrl || !serviceKey) throw new Error('SUPABASE env ausente');
+
+    const providedCron = req.headers.get('x-cron-secret');
+    const providedInternal = req.headers.get('x-internal-call');
+    const cronOk = !!cronSecret && providedCron === cronSecret;
+    const internalOk = providedInternal === serviceKey;
+    if (!cronOk && !internalOk) return unauthorized();
+
     const supabase = createClient(supabaseUrl, serviceKey);
 
     const nowIso = new Date().toISOString();
@@ -30,7 +48,6 @@ Deno.serve(async (_req) => {
 
     let ok = 0, failed = 0;
     for (const row of pending) {
-      // Load subject/body from the flow step
       let subject: string | null = null;
       let bodyHtml: string | null = null;
       let toEmail = row.to_email as string | null;
@@ -48,7 +65,6 @@ Deno.serve(async (_req) => {
       const attempts = (row.attempts as number) + 1;
 
       if (!subject || !bodyHtml || !toEmail) {
-        // Won't be sendable — mark as erro terminal
         await supabase.from('email_sends').update({
           status: 'erro', attempts, last_error: 'faltando subject/body/to_email',
         }).eq('id', row.id);
@@ -85,7 +101,6 @@ Deno.serve(async (_req) => {
         ok++;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        // Backoff: retry in 2^attempts minutes; terminal if maxed out
         const finalStatus = attempts >= MAX_ATTEMPTS ? 'erro' : 'pending';
         const nextRun = new Date(Date.now() + Math.pow(2, attempts) * 60_000).toISOString();
         await supabase.from('email_sends').update({
