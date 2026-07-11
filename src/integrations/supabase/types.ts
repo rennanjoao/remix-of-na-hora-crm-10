@@ -644,6 +644,7 @@ export type Database = {
       }
       leads: {
         Row: {
+          alto_engajamento_email: boolean
           assigned_to: string | null
           bairro: string | null
           cidade: string | null
@@ -677,6 +678,7 @@ export type Database = {
           zona: string | null
         }
         Insert: {
+          alto_engajamento_email?: boolean
           assigned_to?: string | null
           bairro?: string | null
           cidade?: string | null
@@ -712,6 +714,7 @@ export type Database = {
           zona?: string | null
         }
         Update: {
+          alto_engajamento_email?: boolean
           assigned_to?: string | null
           bairro?: string | null
           cidade?: string | null
@@ -1059,6 +1062,7 @@ export type Database = {
       claim_next_lead: {
         Args: never
         Returns: {
+          alto_engajamento_email: boolean
           assigned_to: string | null
           bairro: string | null
           cidade: string | null
@@ -1125,6 +1129,7 @@ export type Database = {
       leads_para_reativar: {
         Args: never
         Returns: {
+          alto_engajamento_email: boolean
           assigned_to: string | null
           bairro: string | null
           cidade: string | null
