@@ -423,7 +423,14 @@ export default function Leads() {
           </TabsList>
 
           <TabsContent value="pipeline">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            {orphanLeads.length > 0 && (
+              <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+                <strong>{orphanLeads.length}</strong> lead{orphanLeads.length > 1 ? 's' : ''} com status desconhecido não cabe{orphanLeads.length > 1 ? 'm' : ''} em nenhuma coluna do funil.
+                Status encontrados: {[...new Set(orphanLeads.map(l => l.status))].join(', ')}.
+                Ajuste o status desses leads para não ficarem invisíveis.
+              </div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-3">
               {COLUMNS.map(col => {
                 const items = byColumn.get(col.id) || [];
                 const isHover = hoverColumn === col.id;
