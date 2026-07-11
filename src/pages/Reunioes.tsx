@@ -13,7 +13,6 @@ import { Loader2, Video, Trash2, ExternalLink, Plus, Zap, X } from 'lucide-react
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ScheduleMeetingModal } from '@/components/ScheduleMeetingModal';
-import { cn } from '@/lib/utils';
 
 interface MeetingRow {
   id: string;
@@ -30,55 +29,52 @@ interface MeetingRow {
   created_at: string;
 }
 
-interface Lead {
+interface LeadRef {
   id: string;
   razao_social: string;
   nome_fantasia: string | null;
-  email: string | null;
-  telefone: string | null;
-}
-
-function sanitizeForUrl(text: string): string {
-  return text
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .substring(0, 30);
 }
 
 export default function Reunioes() {
-  const { profile, isAdmin, isSDR, isGerente } = useAuth();
+  const { profile, isAdmin, isSDR } = useAuth();
   const [meetings, setMeetings] = useState<MeetingRow[]>([]);
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [leadMap, setLeadMap] = useState<Record<string, Lead>>({});
+  const [leadMap, setLeadMap] = useState<Record<string, LeadRef>>({});
   const [sdrMap, setSdrMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [jitsiRoom, setJitsiRoom] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [meetingsRes, leadsRes, profilesRes] = await Promise.all([
-        supabase.from('meetings').select('*').order('meeting_date', { ascending: false }),
-        supabase.from('leads').select('id, razao_social, nome_fantasia, email, telefone'),
-        supabase.from('profiles').select('id, full_name'),
+      const { data: meetingsData, error: mErr } = await supabase
+        .from('meetings').select('*').order('meeting_date', { ascending: false });
+      if (mErr) throw mErr;
+
+      const meetingsRows = (meetingsData as MeetingRow[]) || [];
+      setMeetings(meetingsRows);
+
+      // Só puxa leads e SDRs realmente referenciados — evita carregar tabelas inteiras.
+      const leadIds = [...new Set(meetingsRows.map(m => m.lead_id).filter(Boolean))];
+      const sdrIds = [...new Set(meetingsRows.map(m => m.sdr_id).filter(Boolean))];
+
+      const [leadsRes, profilesRes] = await Promise.all([
+        leadIds.length
+          ? supabase.from('leads').select('id, razao_social, nome_fantasia').in('id', leadIds)
+          : Promise.resolve({ data: [], error: null } as { data: LeadRef[]; error: null }),
+        sdrIds.length
+          ? supabase.from('profiles').select('id, full_name').in('id', sdrIds)
+          : Promise.resolve({ data: [], error: null } as { data: { id: string; full_name: string | null }[]; error: null }),
       ]);
 
-      setMeetings((meetingsRes.data as MeetingRow[]) || []);
-      setLeads(leadsRes.data || []);
-      
-      const lMap: Record<string, Lead> = {};
-      (leadsRes.data || []).forEach(l => { lMap[l.id] = l; });
+      const lMap: Record<string, LeadRef> = {};
+      (leadsRes.data || []).forEach((l) => { lMap[l.id] = l; });
       setLeadMap(lMap);
 
       const sMap: Record<string, string> = {};
-      (profilesRes.data || []).forEach(p => { sMap[p.id] = p.full_name || 'Sem nome'; });
+      (profilesRes.data || []).forEach((p) => { sMap[p.id] = p.full_name || 'Sem nome'; });
       setSdrMap(sMap);
     } catch (error) {
       console.error('Error:', error);
@@ -103,7 +99,7 @@ export default function Reunioes() {
         jitsi_link: jitsiLink,
         sdr_id: profile.id,
         created_by: profile.id,
-        lead_id: leads[0]?.id || profile.id, // fallback
+        lead_id: profile.id, // fallback: reunião sem lead vinculado
         meeting_type: 'instant',
         status: 'em_andamento',
       });
@@ -173,7 +169,6 @@ export default function Reunioes() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Jitsi Iframe */}
         {jitsiRoom && (
           <Card className="border-primary">
             <CardHeader className="pb-2">
@@ -211,7 +206,7 @@ export default function Reunioes() {
                   <Zap className="h-4 w-4 mr-2" />
                   Iniciar Agora
                 </Button>
-                <Button onClick={() => { setSelectedLead(null); setScheduleOpen(true); }}>
+                <Button onClick={() => setScheduleOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Agendar Reunião
                 </Button>
@@ -231,9 +226,7 @@ export default function Reunioes() {
                 <CardDescription>{filteredMeetings.length} reuniões</CardDescription>
               </div>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Filtrar" />
-                </SelectTrigger>
+                <SelectTrigger className="w-40"><SelectValue placeholder="Filtrar" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas</SelectItem>
                   <SelectItem value="agendada">Agendadas</SelectItem>
@@ -271,11 +264,7 @@ export default function Reunioes() {
                       <TableCell>{getStatusBadge(meeting.status, meeting.meeting_date)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setJitsiRoom(meeting.jitsi_link)}
-                          >
+                          <Button size="sm" variant="outline" onClick={() => setJitsiRoom(meeting.jitsi_link)}>
                             <ExternalLink className="h-3 w-3 mr-1" />
                             Entrar
                           </Button>
@@ -320,13 +309,11 @@ export default function Reunioes() {
           </CardContent>
         </Card>
 
-        {/* Schedule Meeting Modal - with lead selector */}
         <ScheduleMeetingModal
           open={scheduleOpen}
           onOpenChange={setScheduleOpen}
-          lead={selectedLead}
+          lead={null}
           onMeetingCreated={fetchAll}
-          leads={leads}
         />
       </div>
     </DashboardLayout>

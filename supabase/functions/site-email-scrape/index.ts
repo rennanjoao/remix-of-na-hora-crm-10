@@ -21,13 +21,79 @@ function isValid(email: string): boolean {
   return !BLOCKLIST.some(b => domain === b || domain.endsWith("." + b));
 }
 
+// ---- Proteção contra SSRF ----
+function ipv4ToInt(ip: string): number | null {
+  const parts = ip.split(".");
+  if (parts.length !== 4) return null;
+  let n = 0;
+  for (const p of parts) {
+    const v = Number(p);
+    if (!Number.isInteger(v) || v < 0 || v > 255) return null;
+    n = (n << 8) | v;
+  }
+  return n >>> 0;
+}
+function isPrivateIPv4(ip: string): boolean {
+  const n = ipv4ToInt(ip);
+  if (n === null) return false;
+  const inRange = (a: string, mask: number) => {
+    const base = ipv4ToInt(a)!;
+    const m = mask === 0 ? 0 : (~0 << (32 - mask)) >>> 0;
+    return (n & m) === (base & m);
+  };
+  return (
+    inRange("10.0.0.0", 8) ||
+    inRange("172.16.0.0", 12) ||
+    inRange("192.168.0.0", 16) ||
+    inRange("127.0.0.0", 8) ||        // loopback
+    inRange("169.254.0.0", 16) ||     // link-local + metadata AWS/GCP
+    inRange("0.0.0.0", 8) ||
+    inRange("100.64.0.0", 10) ||      // CGNAT
+    inRange("192.0.0.0", 24) ||
+    inRange("198.18.0.0", 15) ||
+    inRange("224.0.0.0", 4)           // multicast
+  );
+}
+function isForbiddenHostname(h: string): boolean {
+  const host = h.toLowerCase();
+  if (host === "localhost" || host.endsWith(".localhost")) return true;
+  if (host === "metadata.google.internal") return true;
+  // IPv6 loopback/link-local/unique-local
+  if (host === "[::1]" || host.startsWith("[fc") || host.startsWith("[fd") || host.startsWith("[fe80")) return true;
+  // IPv4 literal
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) return isPrivateIPv4(host);
+  return false;
+}
+async function resolvesToPrivate(hostname: string): Promise<boolean> {
+  if (isForbiddenHostname(hostname)) return true;
+  try {
+    // deno-lint-ignore no-explicit-any
+    const dns = (Deno as any).resolveDns;
+    if (typeof dns !== "function") return false;
+    const [a4, a6] = await Promise.allSettled([dns(hostname, "A"), dns(hostname, "AAAA")]);
+    if (a4.status === "fulfilled") {
+      for (const ip of a4.value as string[]) if (isPrivateIPv4(ip)) return true;
+    }
+    if (a6.status === "fulfilled") {
+      for (const ip of a6.value as string[]) {
+        const lc = ip.toLowerCase();
+        if (lc === "::1" || lc.startsWith("fc") || lc.startsWith("fd") || lc.startsWith("fe80")) return true;
+      }
+    }
+    return false;
+  } catch {
+    // Se não conseguirmos resolver, seja conservador e rejeite
+    return true;
+  }
+}
+
 async function fetchWithTimeout(url: string, ms = 5000): Promise<string | null> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
   try {
     const res = await fetch(url, {
       signal: ctrl.signal,
-      redirect: "follow",
+      redirect: "manual", // não seguimos redirects para evitar SSRF via redirect
       headers: { "User-Agent": "Mozilla/5.0 (compatible; NaHoraBot/1.0)" },
     });
     if (!res.ok) return null;
@@ -79,6 +145,17 @@ Deno.serve(async (req) => {
     } catch {
       return new Response(JSON.stringify({ emails: [] }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (base.protocol !== "http:" && base.protocol !== "https:") {
+      return new Response(JSON.stringify({ emails: [], error: "protocolo não permitido" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (await resolvesToPrivate(base.hostname)) {
+      return new Response(JSON.stringify({ emails: [], error: "host não permitido" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 

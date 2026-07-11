@@ -23,8 +23,11 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ScheduleMeetingModal } from '@/components/ScheduleMeetingModal';
 import { cn } from '@/lib/utils';
-
-type LeadStatus = 'novo' | 'contato' | 'qualificado' | 'proposta' | 'negociacao' | 'ganho' | 'perdido';
+import {
+  KANBAN_COLUMNS as COLUMNS,
+  groupLeadsByColumn,
+  type LeadStatus,
+} from '@/lib/kanban-columns';
 
 interface Lead {
   id: string;
@@ -48,14 +51,6 @@ type LeadExt = Lead & { nome_decisor?: string | null };
 interface TimelineEntry {
   id: string; content: string; contact_type: string | null; created_at: string; author_id: string | null;
 }
-
-// Kanban columns → mapped to existing enum values
-const COLUMNS: { id: LeadStatus; label: string; badgeClass: string }[] = [
-  { id: 'novo', label: 'Novo', badgeClass: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30' },
-  { id: 'contato', label: 'Enriquecido', badgeClass: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30' },
-  { id: 'qualificado', label: 'Email Enviado', badgeClass: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30' },
-  { id: 'negociacao', label: 'Conversando', badgeClass: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' },
-];
 
 const CSV_COLUMNS: { header: string; get: (l: LeadExt) => string }[] = [
   { header: 'Empresa', get: l => l.nome_fantasia || l.razao_social || '' },
@@ -118,7 +113,7 @@ export default function Leads() {
   const [editDecisor, setEditDecisor] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const activeStatuses: LeadStatus[] = ['novo', 'contato', 'qualificado', 'proposta', 'negociacao'];
+  const activeStatuses: LeadStatus[] = COLUMNS.map(c => c.id);
 
   const fetchLeadsPage = async (which: 'pipeline' | 'descartados', page: number, append: boolean, f = appliedFilters) => {
     append ? setLoadingMore(true) : setLoading(true);
@@ -190,14 +185,10 @@ export default function Leads() {
   const activeLeads = useMemo(() => leads.filter(l => l.status !== 'perdido'), [leads]);
   const discardedLeads = useMemo(() => leads.filter(l => l.status === 'perdido'), [leads]);
 
-  const byColumn = useMemo(() => {
-    const map = new Map<LeadStatus, LeadExt[]>();
-    COLUMNS.forEach(c => map.set(c.id, []));
-    activeLeads.forEach(l => {
-      if (map.has(l.status)) map.get(l.status)!.push(l);
-    });
-    return map;
-  }, [activeLeads]);
+  const { byColumn, orphans: orphanLeads } = useMemo(
+    () => groupLeadsByColumn<LeadExt>(activeLeads, COLUMNS),
+    [activeLeads],
+  );
 
   const updateStatus = async (leadId: string, newStatus: LeadStatus, extra?: Partial<LeadExt>) => {
     try {
@@ -432,7 +423,14 @@ export default function Leads() {
           </TabsList>
 
           <TabsContent value="pipeline">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            {orphanLeads.length > 0 && (
+              <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+                <strong>{orphanLeads.length}</strong> lead{orphanLeads.length > 1 ? 's' : ''} com status desconhecido não cabe{orphanLeads.length > 1 ? 'm' : ''} em nenhuma coluna do funil.
+                Status encontrados: {[...new Set(orphanLeads.map(l => l.status))].join(', ')}.
+                Ajuste o status desses leads para não ficarem invisíveis.
+              </div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-3">
               {COLUMNS.map(col => {
                 const items = byColumn.get(col.id) || [];
                 const isHover = hoverColumn === col.id;
