@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,8 +7,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { toast } from 'sonner';
-import { CalendarIcon, Video, Loader2 } from 'lucide-react';
+import { CalendarIcon, Video, Loader2, ChevronsUpDown, Check } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -33,22 +34,86 @@ interface ScheduleMeetingModalProps {
   onOpenChange: (open: boolean) => void;
   lead: Lead | null;
   onMeetingCreated?: () => void;
+  /**
+   * @deprecated Não é mais necessário passar a lista completa de leads.
+   * O modal busca sob demanda com paginação/busca. Mantido apenas por
+   * compatibilidade — se passado, é ignorado.
+   */
   leads?: Lead[];
 }
 
-function sanitizeForUrl(text: string): string {
-  return text
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .substring(0, 30);
+const SEARCH_LIMIT = 25;
+
+/** Combobox de leads com busca server-side (evita carregar a tabela inteira). */
+function LeadCombobox({
+  value, onChange,
+}: { value: Lead | null; onChange: (l: Lead) => void }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const [rows, setRows] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const handle = setTimeout(async () => {
+      setLoading(true);
+      try {
+        let query = supabase
+          .from('leads')
+          .select('id, razao_social, nome_fantasia, email, telefone')
+          .order('updated_at', { ascending: false })
+          .limit(SEARCH_LIMIT);
+        const term = q.trim();
+        if (term) {
+          const like = `%${term}%`;
+          query = query.or(`razao_social.ilike.${like},nome_fantasia.ilike.${like},email.ilike.${like}`);
+        }
+        const { data } = await query;
+        setRows((data ?? []) as Lead[]);
+      } finally { setLoading(false); }
+    }, 200);
+    return () => clearTimeout(handle);
+  }, [q, open]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" className="w-full justify-between font-normal">
+          {value ? (value.nome_fantasia || value.razao_social) : 'Selecione a empresa'}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <Command shouldFilter={false}>
+          <CommandInput placeholder="Buscar por nome ou e-mail..." value={q} onValueChange={setQ} />
+          <CommandList>
+            {loading && <div className="py-3 text-center text-xs text-muted-foreground">Buscando...</div>}
+            {!loading && rows.length === 0 && <CommandEmpty>Nenhum lead encontrado</CommandEmpty>}
+            <CommandGroup>
+              {rows.map((l) => (
+                <CommandItem
+                  key={l.id}
+                  value={l.id}
+                  onSelect={() => { onChange(l); setOpen(false); }}
+                >
+                  <Check className={cn('mr-2 h-4 w-4', value?.id === l.id ? 'opacity-100' : 'opacity-0')} />
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate text-sm">{l.nome_fantasia || l.razao_social}</div>
+                    {l.email && <div className="truncate text-xs text-muted-foreground">{l.email}</div>}
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
-export function ScheduleMeetingModal({ open, onOpenChange, lead, onMeetingCreated, leads = [] }: ScheduleMeetingModalProps) {
-  const [selectedLeadId, setSelectedLeadId] = useState<string>('');
-  const activeLead = lead || leads.find(l => l.id === selectedLeadId) || null;
+export function ScheduleMeetingModal({ open, onOpenChange, lead, onMeetingCreated }: ScheduleMeetingModalProps) {
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const activeLead = useMemo(() => lead || selectedLead, [lead, selectedLead]);
   const { profile, isAdmin } = useAuth();
   const [sdrs, setSdrs] = useState<SDRProfile[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
@@ -62,39 +127,30 @@ export function ScheduleMeetingModal({ open, onOpenChange, lead, onMeetingCreate
     sdr_id: '',
   });
 
-  // Pre-fill when lead changes
   useEffect(() => {
-    const l = activeLead;
-    if (l) {
+    if (activeLead) {
       setForm(prev => ({
         ...prev,
-        title: `Reunião com ${l.nome_fantasia || l.razao_social}`,
-        contact_name: '',
+        title: prev.title || `Reunião com ${activeLead.nome_fantasia || activeLead.razao_social}`,
       }));
     }
-  }, [lead, selectedLeadId]);
+  }, [activeLead]);
 
-  // Set default SDR
   useEffect(() => {
     if (profile && !isAdmin) {
       setForm(prev => ({ ...prev, sdr_id: profile.id }));
     }
   }, [profile, isAdmin]);
 
-  // Fetch SDRs for admin
   useEffect(() => {
     if (!isAdmin) return;
     const fetchSDRs = async () => {
       const { data: roles } = await supabase
-        .from('user_roles')
-        .select('user_id')
-        .eq('role', 'sdr');
+        .from('user_roles').select('user_id').eq('role', 'sdr');
       if (roles && roles.length > 0) {
         const userIds = roles.map(r => r.user_id);
         const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, full_name, user_id')
-          .in('user_id', userIds);
+          .from('profiles').select('id, full_name, user_id').in('user_id', userIds);
         setSdrs(profiles?.map(p => ({ id: p.id, full_name: p.full_name })) || []);
       }
     };
@@ -137,6 +193,7 @@ export function ScheduleMeetingModal({ open, onOpenChange, lead, onMeetingCreate
       toast.success(`Reunião agendada! Link: ${linkLabel}`);
       onOpenChange(false);
       setSelectedDate(undefined);
+      setSelectedLead(null);
       setForm({ title: '', description: '', contact_name: '', start_time: '09:00', duration: '30', sdr_id: profile?.id || '' });
       onMeetingCreated?.();
     } catch (error) {
@@ -161,21 +218,10 @@ export function ScheduleMeetingModal({ open, onOpenChange, lead, onMeetingCreate
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
-          {!lead && leads.length > 0 && (
+          {!lead && (
             <div className="space-y-2">
               <Label>Empresa</Label>
-              <Select value={selectedLeadId} onValueChange={setSelectedLeadId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione a empresa" />
-                </SelectTrigger>
-                <SelectContent>
-                  {leads.map(l => (
-                    <SelectItem key={l.id} value={l.id}>
-                      {l.nome_fantasia || l.razao_social}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <LeadCombobox value={selectedLead} onChange={setSelectedLead} />
             </div>
           )}
           <div className="space-y-2">
@@ -233,9 +279,7 @@ export function ScheduleMeetingModal({ open, onOpenChange, lead, onMeetingCreate
             <div className="space-y-2">
               <Label>Duração (min)</Label>
               <Select value={form.duration} onValueChange={(v) => setForm({ ...form, duration: v })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="15">15 min</SelectItem>
                   <SelectItem value="30">30 min</SelectItem>
@@ -251,14 +295,10 @@ export function ScheduleMeetingModal({ open, onOpenChange, lead, onMeetingCreate
             <div className="space-y-2">
               <Label>SDR Responsável</Label>
               <Select value={form.sdr_id} onValueChange={(v) => setForm({ ...form, sdr_id: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o SDR" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Selecione o SDR" /></SelectTrigger>
                 <SelectContent>
                   {sdrs.map(sdr => (
-                    <SelectItem key={sdr.id} value={sdr.id}>
-                      {sdr.full_name || 'Sem nome'}
-                    </SelectItem>
+                    <SelectItem key={sdr.id} value={sdr.id}>{sdr.full_name || 'Sem nome'}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

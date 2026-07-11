@@ -4,11 +4,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Target, Users, Calendar, TrendingUp, CheckCircle, Clock, XCircle, Video, ExternalLink } from 'lucide-react';
+import { Target, Calendar, CheckCircle, Clock, XCircle, Video, ExternalLink } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { format, differenceInMinutes } from 'date-fns';
 import { toast } from 'sonner';
 import { ptBR } from 'date-fns/locale';
+import { LEAD_STATUSES, STATUS_LABELS, type LeadStatus } from '@/lib/kanban-columns';
 
 interface Stats {
   totalLeads: number;
@@ -28,17 +29,29 @@ interface UpcomingMeeting {
   lead_name?: string;
 }
 
-const COLORS = ['hsl(217, 71%, 23%)', 'hsl(166, 64%, 42%)', 'hsl(142, 71%, 45%)', 'hsl(38, 92%, 50%)', 'hsl(0, 84%, 60%)'];
+async function countLeadsByStatus(status: LeadStatus): Promise<number> {
+  const { count, error } = await supabase
+    .from('leads')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', status);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+async function countTasks(completed: boolean): Promise<number> {
+  const { count, error } = await supabase
+    .from('tasks')
+    .select('id', { count: 'exact', head: true })
+    .eq('completed', completed);
+  if (error) throw error;
+  return count ?? 0;
+}
 
 export default function Dashboard() {
-  const { profile, role, isAdmin, isGerente } = useAuth();
+  const { profile, isAdmin, isGerente } = useAuth();
   const [stats, setStats] = useState<Stats>({
-    totalLeads: 0,
-    leadsGanhos: 0,
-    leadsPerdidos: 0,
-    leadsEmAndamento: 0,
-    tasksPendentes: 0,
-    tasksCompletadas: 0,
+    totalLeads: 0, leadsGanhos: 0, leadsPerdidos: 0,
+    leadsEmAndamento: 0, tasksPendentes: 0, tasksCompletadas: 0,
   });
   const [leadsByStatus, setLeadsByStatus] = useState<{ name: string; value: number }[]>([]);
   const [upcomingMeetings, setUpcomingMeetings] = useState<UpcomingMeeting[]>([]);
@@ -46,56 +59,29 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const { data: leads, error: leadsError } = await supabase.from('leads').select('status');
-        if (leadsError) throw leadsError;
-        
-        if (leads) {
-          const ganhos = leads.filter(l => l.status === 'ganho').length;
-          const perdidos = leads.filter(l => l.status === 'perdido').length;
-          const emAndamento = leads.filter(l => !['ganho', 'perdido'].includes(l.status || '')).length;
+        // Contagens agregadas em paralelo — sem carregar a tabela inteira.
+        const counts = await Promise.all(
+          LEAD_STATUSES.map(async (s) => [s, await countLeadsByStatus(s)] as const),
+        );
+        const map = new Map<LeadStatus, number>(counts);
+        const total = counts.reduce((sum, [, n]) => sum + n, 0);
+        const ganhos = map.get('ganho') ?? 0;
+        const perdidos = map.get('perdido') ?? 0;
+        const emAndamento = total - ganhos - perdidos;
 
-          setStats(prev => ({
-            ...prev,
-            totalLeads: leads.length,
-            leadsGanhos: ganhos,
-            leadsPerdidos: perdidos,
-            leadsEmAndamento: emAndamento,
-          }));
+        const [pend, done] = await Promise.all([countTasks(false), countTasks(true)]);
 
-          const statusCount: Record<string, number> = {};
-          leads.forEach(lead => {
-            const status = lead.status || 'novo';
-            statusCount[status] = (statusCount[status] || 0) + 1;
-          });
-
-          const statusLabels: Record<string, string> = {
-            novo: 'Novo',
-            contato: 'Contato',
-            qualificado: 'Qualificado',
-            proposta: 'Proposta',
-            negociacao: 'Negociação',
-            ganho: 'Ganho',
-            perdido: 'Perdido',
-          };
-
-          setLeadsByStatus(
-            Object.entries(statusCount).map(([key, value]) => ({
-              name: statusLabels[key] || key,
-              value,
-            }))
-          );
-        }
-
-        const { data: tasks, error: tasksError } = await supabase.from('tasks').select('completed');
-        if (tasksError) throw tasksError;
-        
-        if (tasks) {
-          setStats(prev => ({
-            ...prev,
-            tasksPendentes: tasks.filter(t => !t.completed).length,
-            tasksCompletadas: tasks.filter(t => t.completed).length,
-          }));
-        }
+        setStats({
+          totalLeads: total,
+          leadsGanhos: ganhos,
+          leadsPerdidos: perdidos,
+          leadsEmAndamento: emAndamento,
+          tasksPendentes: pend,
+          tasksCompletadas: done,
+        });
+        setLeadsByStatus(
+          LEAD_STATUSES.map((s) => ({ name: STATUS_LABELS[s], value: map.get(s) ?? 0 })),
+        );
       } catch (e) {
         console.error('Error fetching stats:', e);
         toast.error('Erro ao carregar dados', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
@@ -119,17 +105,16 @@ export default function Dashboard() {
 
         const { data, error } = await query;
         if (error) throw error;
-        
+
         if (data && data.length > 0) {
-          // Fetch lead names
           const leadIds = [...new Set(data.map(m => m.lead_id))];
           const { data: leads } = await supabase
             .from('leads')
             .select('id, razao_social, nome_fantasia')
             .in('id', leadIds);
-          
+
           const leadMap = new Map(leads?.map(l => [l.id, l.nome_fantasia || l.razao_social]) || []);
-          
+
           setUpcomingMeetings(data.map(m => ({
             ...m,
             lead_name: leadMap.get(m.lead_id) || 'Empresa',
@@ -143,7 +128,7 @@ export default function Dashboard() {
 
     fetchStats();
     fetchUpcomingMeetings();
-  }, [profile]);
+  }, [profile, isAdmin, isGerente]);
 
   const conversionData = [
     { name: 'Ganhos', value: stats.leadsGanhos, fill: 'hsl(142, 71%, 45%)' },
@@ -161,7 +146,6 @@ export default function Dashboard() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Header */}
         <div>
           <h1 className="font-display text-3xl font-bold text-foreground">
             Bem-vindo, {profile?.full_name?.split(' ')[0] || 'Usuário'}!
@@ -171,7 +155,6 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Upcoming Meetings Alert */}
         {upcomingMeetings.length > 0 && (
           <Card className="border-primary/30 bg-primary/5">
             <CardHeader className="pb-3">
@@ -202,10 +185,10 @@ export default function Dashboard() {
                           {meeting.contact_name && ` • ${meeting.contact_name}`}
                         </p>
                         <p className={`text-xs mt-1 font-medium ${
-                          urgency === 'urgent' ? 'text-destructive' : 
+                          urgency === 'urgent' ? 'text-destructive' :
                           urgency === 'soon' ? 'text-amber-600' : 'text-muted-foreground'
                         }`}>
-                          {urgency === 'urgent' 
+                          {urgency === 'urgent'
                             ? `⚠️ Em ${differenceInMinutes(new Date(meeting.meeting_date), new Date())} minutos!`
                             : format(new Date(meeting.meeting_date), "dd/MM 'às' HH:mm", { locale: ptBR })}
                         </p>
@@ -226,7 +209,6 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {/* Stats Grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card className="metric-card">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -281,7 +263,6 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Charts */}
         <div className="grid gap-6 md:grid-cols-2">
           <Card>
             <CardHeader>
@@ -295,12 +276,12 @@ export default function Dashboard() {
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis dataKey="name" className="text-xs" />
                     <YAxis className="text-xs" />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'hsl(var(--card))', 
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
                         border: '1px solid hsl(var(--border))',
                         borderRadius: '8px'
-                      }} 
+                      }}
                     />
                     <Bar dataKey="value" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                   </BarChart>
@@ -331,12 +312,12 @@ export default function Dashboard() {
                         <Cell key={`cell-${index}`} fill={entry.fill} />
                       ))}
                     </Pie>
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'hsl(var(--card))', 
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
                         border: '1px solid hsl(var(--border))',
                         borderRadius: '8px'
-                      }} 
+                      }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
