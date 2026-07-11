@@ -66,7 +66,7 @@ export function BlastListsTab() {
           .order('updated_at', { ascending: false })
           .range(0, PAGE_SIZE - 1);
         if (onlyWithEmail) query = query.not('email', 'is', null);
-        if (status !== 'all') query = query.eq('status', status);
+        if (status !== 'all') query = query.eq('status', status as never);
         const term = search.trim();
         if (term) {
           const like = `%${term}%`;
