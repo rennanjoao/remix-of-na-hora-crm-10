@@ -140,6 +140,7 @@ export function PlacesSearchMode() {
   const [scheduleFor, setScheduleFor] = useState<{ id: string; razao_social: string; nome_fantasia: string | null; email: string | null; telefone: string | null } | null>(null);
   const [leadInfoByPlace, setLeadInfoByPlace] = useState<Map<string, { status: string; contact_outcome: string | null }>>(new Map());
   const [statusTab, setStatusTab] = useState<'todos' | 'novos' | 'trabalhados'>('todos');
+  const [emailFilter, setEmailFilter] = useState<'todos' | 'com_email' | 'sem_email'>('todos');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
   const scrapedRequested = useRef<Set<string>>(new Set());
@@ -217,8 +218,16 @@ export function PlacesSearchMode() {
     return zone.keywords.some(k => haystack.includes(k));
   };
 
-  const visibleResults = useMemo(() => {
-    const filtered = results
+  const hasEmail = (placeId: string): boolean => {
+    if (emailOverrides.get(placeId)) return true;
+    return (scrapedEmails.get(placeId)?.length ?? 0) > 0;
+  };
+
+  // Zone/status filter only — deliberately NOT filtered by email yet, so scraping
+  // (below) keeps running on every candidate and the email filter can react as
+  // results come in, instead of permanently hiding items before they're checked.
+  const baseResults = useMemo(() => {
+    return results
       .filter(r => !discardedIds.has(r.place_id))
       .filter(r => !activeZone || matchesZone(r, activeZone))
       .filter(r => {
@@ -226,14 +235,31 @@ export function PlacesSearchMode() {
         const imported = importedIds.has(r.place_id);
         return statusTab === 'novos' ? !imported : imported;
       });
+  }, [results, discardedIds, activeZone, statusTab, importedIds]);
+
+  const emailCounts = useMemo(() => {
+    let com = 0;
+    for (const r of baseResults) if (hasEmail(r.place_id)) com++;
+    return { com, sem: baseResults.length - com };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseResults, scrapedEmails, emailOverrides]);
+
+  const visibleResults = useMemo(() => {
+    const filtered = baseResults.filter(r => {
+      if (emailFilter === 'todos') return true;
+      const found = hasEmail(r.place_id);
+      return emailFilter === 'com_email' ? found : !found;
+    });
     if (sortMode === 'rating') return [...filtered].sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
     if (sortMode === 'reviews') return [...filtered].sort((a, b) => (b.rating_count ?? -1) - (a.rating_count ?? -1));
     return filtered;
-  }, [results, discardedIds, activeZone, sortMode, statusTab, importedIds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseResults, sortMode, emailFilter, scrapedEmails, emailOverrides]);
 
-  // Auto-scrape emails for visible cards with website
+  // Auto-scrape emails for every candidate with a website (independent of the
+  // email filter, so filtering by "com e-mail" doesn't starve its own data source)
   useEffect(() => {
-    for (const item of visibleResults) {
+    for (const item of baseResults) {
       if (!item.website) continue;
       if (scrapedRequested.current.has(item.place_id)) continue;
       scrapedRequested.current.add(item.place_id);
@@ -250,7 +276,7 @@ export function PlacesSearchMode() {
         })
         .catch(() => { /* silent */ });
     }
-  }, [visibleResults]);
+  }, [baseResults]);
 
   const insertLeadFromPlace = async (item: PlaceItem, sdrId: string): Promise<string | null> => {
     const phone = normalizePhone(item.phone);
@@ -657,6 +683,15 @@ export function PlacesSearchMode() {
       return n;
     });
   };
+  const selectAllWithEmail = () => {
+    const withEmail = visibleResults.filter(r => hasEmail(r.place_id));
+    if (withEmail.length === 0) { toast.info('Nenhum e-mail encontrado nos resultados visíveis'); return; }
+    setSelectedIds(prev => {
+      const n = new Set(prev);
+      withEmail.forEach(r => n.add(r.place_id));
+      return n;
+    });
+  };
   const selectedItems = useMemo(
     () => results.filter(r => selectedIds.has(r.place_id)),
     [results, selectedIds],
@@ -736,6 +771,19 @@ export function PlacesSearchMode() {
               </button>
             ))}
           </div>
+          <div className="flex flex-wrap items-center gap-1.5 px-1">
+            <span className="text-xs text-muted-foreground mr-1 inline-flex items-center gap-1"><Mail className="h-3 w-3" />E-mail:</span>
+            {([
+              { id: 'todos', label: 'Todos' },
+              { id: 'com_email', label: `Com e-mail (${emailCounts.com})` },
+              { id: 'sem_email', label: `Sem e-mail (${emailCounts.sem})` },
+            ] as const).map(t => (
+              <button key={t.id} type="button" onClick={() => setEmailFilter(t.id)}
+                className={`text-xs px-2.5 py-1 rounded-full border transition ${emailFilter === t.id ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-accent'}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
           <div className="flex items-center justify-between gap-2 flex-wrap px-1">
             <div className="text-xs text-muted-foreground">
               Exibindo {visibleResults.length} de {results.length} resultados
@@ -745,6 +793,9 @@ export function PlacesSearchMode() {
               <Button size="sm" variant="secondary" onClick={handleBatchImport} disabled={!!batch || notImportedCount === 0}>
                 {batch ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />Importando {batch.current} de {batch.total}...</> :
                   <><Users className="h-3.5 w-3.5 mr-1" />Importar todos os visíveis ({notImportedCount})</>}
+              </Button>
+              <Button size="sm" variant="outline" onClick={selectAllWithEmail} disabled={emailCounts.com === 0}>
+                <Mail className="h-3.5 w-3.5 mr-1" />Selecionar com e-mail ({emailCounts.com})
               </Button>
               <Select value={sortMode} onValueChange={(v: SortMode) => setSortMode(v)}>
                 <SelectTrigger className="h-8 w-[200px] text-xs"><SelectValue /></SelectTrigger>
@@ -773,6 +824,9 @@ export function PlacesSearchMode() {
                     <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>Limpar</Button>
                     <Button size="sm" variant="outline" onClick={selectAllVisible}>
                       {visibleResults.every(r => selectedIds.has(r.place_id)) ? <><Square className="h-3.5 w-3.5 mr-1" />Desmarcar visíveis</> : <><CheckSquare className="h-3.5 w-3.5 mr-1" />Selecionar visíveis</>}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={selectAllWithEmail} disabled={emailCounts.com === 0}>
+                      <Mail className="h-3.5 w-3.5 mr-1" />+ com e-mail
                     </Button>
                     <Button size="sm" onClick={() => setBulkOpen(true)}>
                       <Send className="h-3.5 w-3.5 mr-1" />Ações em Massa
