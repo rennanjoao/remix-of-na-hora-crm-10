@@ -12,6 +12,7 @@ import {
   Mail,
   Radio,
   Activity,
+  Zap,
 } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -40,12 +41,13 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'sdr', 'gerente', 'motorista'] },
+  { title: 'Foco', url: '/foco', icon: Zap, roles: ['admin', 'sdr', 'gerente'] },
   { title: 'Leads', url: '/leads', icon: Target, roles: ['admin', 'sdr', 'gerente'] },
   { title: 'Prospecção', url: '/prospeccao', icon: Search, roles: ['admin', 'sdr'] },
-  { title: 'Reuniões', url: '/reunioes', icon: Video, roles: ['admin', 'sdr', 'gerente'] },
   { title: 'Automação', url: '/automacao', icon: Mail, roles: ['admin', 'sdr'] },
-  { title: 'Calendário', url: '/calendario', icon: Calendar, roles: ['admin', 'sdr', 'gerente'] },
+  { title: 'Reuniões', url: '/reunioes', icon: Video, roles: ['admin', 'gerente'] },
+  { title: 'Calendário', url: '/calendario', icon: Calendar, roles: ['admin', 'gerente'] },
+  { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'gerente', 'motorista'] },
   { title: 'Command Center', url: '/command-center', icon: Radio, roles: ['admin', 'gerente'] },
   { title: 'Auditoria SDR', url: '/auditoria-sdr', icon: Activity, roles: ['admin', 'gerente'] },
   { title: 'Administração', url: '/admin', icon: UserCog, roles: ['admin'] },

@@ -10,7 +10,7 @@ export default function Index() {
 
   useEffect(() => {
     if (user && !loading) {
-      navigate('/dashboard');
+      navigate('/foco');
     }
   }, [user, loading, navigate]);
 

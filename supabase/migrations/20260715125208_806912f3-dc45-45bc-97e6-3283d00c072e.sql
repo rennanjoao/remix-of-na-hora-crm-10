@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.sdr_work_queue() FROM PUBLIC, anon;
