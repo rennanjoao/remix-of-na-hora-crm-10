@@ -193,7 +193,12 @@ export function PlacesSearchMode() {
       });
       if (error) throw new Error(error.message);
       const items = (data?.results || []) as PlaceItem[];
-      setResults(prev => append ? [...prev, ...items] : items);
+      setResults(prev => {
+        if (!append) return items;
+        const merged = new Map(prev.map(r => [r.place_id, r]));
+        for (const it of items) merged.set(it.place_id, it);
+        return Array.from(merged.values());
+      });
       setNextPageToken(data?.next_page_token || null);
       setLastQuery(term);
       if (!append && items.length === 0) toast.info('Nenhum resultado encontrado');
