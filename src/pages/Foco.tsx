@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { LeadActivityTimeline } from '@/components/leads/LeadActivityTimeline';
 import { LeadRichProfile } from '@/components/prospeccao/LeadRichProfile';
-import ScheduleMeetingModal from '@/components/ScheduleMeetingModal';
+import { ScheduleMeetingModal } from '@/components/ScheduleMeetingModal';
 import { logLeadActivity } from '@/lib/lead-activities';
 import { getDefaultScript, interpolateScript } from '@/lib/approach-scripts';
 import { cn } from '@/lib/utils';
@@ -69,7 +69,7 @@ export default function Foco() {
     setLoading(true);
     const { data, error } = await supabase.rpc('sdr_work_queue' as never);
     if (error) toast.error('Erro ao carregar fila', { description: error.message });
-    setItems((data as QueueItem[]) || []);
+    setItems(((data as unknown) as QueueItem[]) || []);
     setLoading(false);
   }, []);
 
