@@ -1,77 +1,126 @@
-# Refatoração do módulo de prospecção — 8 etapas
 
-Antes de começar, preciso **confirmar 3 pontos bloqueantes** (principalmente Etapa 4) para não travar no meio da implementação.
+# Plano de Evolução — CRM orientado a Prospecção Ativa
 
----
+## Princípio norteador
+Uma única tela ("Foco do Dia") vira o lugar onde o SDR trabalha 90% do tempo. Todo o resto (Leads, Prospecção, Reuniões, Automação) passa a ser suporte, não destino diário.
 
-## Perguntas bloqueantes
+## Diagnóstico rápido do que existe hoje
+- 9 páginas no menu (Dashboard, Leads, Prospecção, Reuniões, Automação, Calendário, Command Center, Auditoria, Admin) → dispersão excessiva para o SDR.
+- Componentes fortes já prontos e reutilizáveis: `LeadDetailPanel`, `LeadRichProfile`, `CNPJSearchCard`, `PlacesSearchMode`, `ReactivationList`, `LeadActivityTimeline`, `ScheduleMeetingModal`, `BulkEmailModal`, `BlockEditor`, `FlowManager`, `InboxTab`, kanban em `Leads.tsx`, `claim_next_lead()` RPC, tabelas `tasks`/`lead_activities`/`meetings`/`email_inbox`.
+- `Prospeccao.tsx` já usa split-screen (histórico + painel do lead) — é o embrião da nova experiência.
+- Falta: uma fila priorizada unificada que junte novos leads + follow-ups + respostas + tarefas + reuniões próximas.
 
-### 1. Google Meet real (Etapa 4) — como autenticar?
+## Nova arquitetura de navegação
+Menu reduzido a 4 itens para SDR:
 
-Criar Meet real pela Google Calendar API **não é gratuito de configurar** — exige credenciais. Duas opções:
+```text
+1. Foco        (nova página — fila do dia, é a home do SDR)
+2. Leads       (base completa, busca/kanban — consulta, não operação diária)
+3. Prospecção  (gerar novos leads: CNPJ + Places + Mining)
+4. Automação   (fluxos + inbox + listas)
+```
 
-- **A) OAuth refresh token do Felipe (recomendado, mais simples):** você precisa criar um projeto no Google Cloud Console, habilitar Calendar API, criar OAuth Client ID (Web), rodar uma vez o fluxo de consent com a conta do Felipe e me passar o `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` e `GOOGLE_OAUTH_REFRESH_TOKEN` como secrets. Todo evento é criado no calendário do Felipe.
-- **B) Service Account com Domain-Wide Delegation:** exige Google Workspace (pago) e admin do domínio. Só faz sentido se vocês já tiverem Workspace.
-- **C) Conector Google Calendar da Lovable:** já disponível, mas ele acessa o calendário do **dono da conexão** (você), não do Felipe — pode ou não servir dependendo de quem organiza as reuniões.
+Reuniões e Calendário deixam de ser páginas próprias e viram abas/drawer dentro de Foco. Command Center e Auditoria ficam só para admin/gerente. Dashboard some do menu do SDR (métricas vão para o header do Foco).
 
-**Confirma qual caminho?** Se A, posso deixar a edge function pronta e você me passa os secrets depois; enquanto isso o botão "Agendar" fica em modo Jitsi (fallback) para não quebrar.
+## Página "Foco do Dia" — o coração do produto
 
-### 2. Etapa 5 — trigger de banco ou frontend?
+Layout em 3 colunas (reaproveita padrão split-screen atual):
 
-Você deu as duas opções. **Recomendo frontend** (chamar `enrollLeadInCampaign()` logo depois do UPDATE do `contact_outcome`), porque:
-- trigger de banco precisaria ler `email_campaigns`/`email_steps` e agendar `email_sends` com `scheduled_at = now + delay_days` — dá pra fazer, mas fica opaco pra debug;
-- frontend reusa a lógica já existente em `Automacao.tsx` e é fácil de testar.
+```text
+┌───────────────┬──────────────────────────┬──────────────┐
+│ FILA (250px)  │ LEAD ATIVO (fluido)      │ AÇÕES (320) │
+│               │                          │              │
+│ [Agora] 12    │ Header: nome, cidade,    │ Ligar        │
+│  • Lead A     │ CNAE, telefone, tags     │ WhatsApp     │
+│  • Lead B     │                          │ E-mail       │
+│               │ Tabs: Perfil │ Timeline  │ Agendar      │
+│ [Hoje] 34     │        │ E-mails │ Tarefas│ Nota        │
+│ [Atrasados] 8 │                          │ ─────        │
+│ [Respostas] 3 │ LeadRichProfile          │ Próxima ação │
+│ [Reuniões] 2  │ + LeadActivityTimeline   │ Descartar    │
+└───────────────┴──────────────────────────┴──────────────┘
+```
 
-Confirma **frontend**? (se preferir trigger, faço).
+Regras da fila (ordenação por prioridade, calculada server-side):
+1. Respostas recebidas (email_inbox não lido)
+2. Reuniões nas próximas 2h
+3. Tarefas atrasadas
+4. Follow-ups do dia (lead_activities.next_action_at ≤ hoje)
+5. Novos leads sem contato (status `novo`, sem timeline)
+6. Reativação (`leads_para_reativar()` já existe)
 
-### 3. Etapa 7 — scrape de site
+Interações-chave:
+- Teclado: `J/K` navega, `C` liga, `W` WhatsApp, `E` e-mail, `M` marca reunião, `N` nota, `D` descarta, `→` próximo. Zero mouse necessário.
+- Ao concluir uma ação, o próximo item da fila carrega automaticamente (sem clique).
+- "Ligar" abre `tel:`, registra `call_made` e abre um textarea de resultado inline (sem modal): "atendeu / não atendeu / caixa" + próxima data → cria task + timeline em uma submissão.
+- "WhatsApp" reutiliza a lógica já em `Prospeccao.tsx` (wa.me + script interpolado).
+- "E-mail" abre um popover com `BlockEditor` compacto ou dispara passo de fluxo com um clique.
+- "Agendar" reutiliza `ScheduleMeetingModal` mas como drawer lateral, pré-preenchido.
 
-Fetch direto de site externo funciona em edge function (sem CORS), mas alguns sites (Cloudflare, bot-protection) devolvem 403. Aceita que nesses casos a função apenas retorne `emails: []` sem erro, e o card mostre "não foi possível extrair automaticamente"? (alternativa paga seria Firecrawl).
+## Reaproveitamento de componentes
+| Componente atual                     | Novo uso                                    |
+|--------------------------------------|---------------------------------------------|
+| `LeadRichProfile`, `LeadDetailPanel` | Painel central do Foco                      |
+| `LeadActivityTimeline`               | Aba Timeline do Foco                        |
+| `ScheduleMeetingModal`               | Ação "Agendar" (vira drawer)                |
+| `BlockEditor` + `FlowManager`        | Popover de e-mail rápido + gestão em Automação |
+| `InboxTab`                           | Fonte da categoria "Respostas" na fila      |
+| `ReactivationList`                   | Fonte da categoria "Reativação" na fila     |
+| `CNPJSearchCard`, `PlacesSearchMode` | Continuam em `/prospeccao` (gerador de leads) |
+| Kanban do `Leads.tsx`                | Mantido como visão alternativa em `/leads`  |
+| RPC `claim_next_lead`                | Botão "Puxar novo lead" da fila             |
 
----
+## Fluxos simplificados
+- **Prospectar novo lead**: hoje = ir para Prospecção → buscar → importar → ir para Leads → abrir card → agir. Novo = na Foco, botão "Puxar lead" chama `claim_next_lead` e o lead já aparece no painel central pronto para ação.
+- **Follow-up**: hoje = lembrar de olhar filtro/tarefa. Novo = aparece sozinho na fila no dia certo.
+- **Resposta de e-mail**: hoje = abrir Automação → Inbox. Novo = topo da fila com destaque.
+- **Agendar reunião**: hoje = modal em página separada. Novo = drawer inline sem sair do Foco.
+- **Registrar ligação**: hoje = abrir card → escrever timeline → criar task. Novo = 1 formulário inline com resultado + próxima data.
 
-## Plano de implementação (após respostas)
+## Telas que somem/consolidam
+- `/dashboard` → removida do menu SDR (métricas viram header compacto do Foco: prospectados hoje, reuniões, respostas, taxa).
+- `/reunioes` e `/calendario` → viram abas dentro do Foco (drawer "Minha agenda"). Rota mantida acessível para gerente.
+- `Automacao` mantém 3 abas, mas Inbox agora é fonte da fila (menos motivo para abrir a página).
+- Modais de e-mail em massa e importação continuam onde estão — não afetam o dia-a-dia do SDR.
 
-### Etapa 1 — Migration SQL
-Nova migration com o enum `contact_outcome`, 4 colunas em `leads`, e a função `leads_para_reativar()`. GRANTs preservados. `loss_reason` mantido.
+## Automação que reduz esforço mental
+- Após "não atendeu" 2×, sistema sugere trocar canal (WhatsApp/e-mail) automaticamente.
+- Após e-mail enviado sem resposta em 3 dias, cria follow-up na fila.
+- Resposta detectada em `email_inbox` → sobe para topo da fila do SDR dono.
+- Reunião confirmada → cria task de preparo 1h antes.
+- Lead sem atividade há 30 dias e não convertido → move para reativação.
 
-### Etapa 2 — Refatorar `PlacesSearchMode.tsx`
-Trocar `LOSS_REASONS` por `CONTACT_OUTCOMES` (6 opções), cada uma com um handler que calcula `next_contact_date`, `status`, `is_suppressed` e chama UPDATE. Se lead ainda não importado, importa antes.
+Tudo isso já tem infraestrutura (tasks, lead_activities, email_inbox, cron `process-email-flows`); falta apenas: uma view SQL `sdr_work_queue` que una as fontes com score de prioridade, e um trigger/edge function pequena para as regras acima.
 
-### Etapa 3 — Importação em lote
-Botão "Importar todos os visíveis (N)" acima da lista. Roda `handleImport` em `Promise.all` com estado `{ current, total }` mostrando "Importando X de Y…". Skipa os que já estão em `importedIds`.
+## Entregas priorizadas
 
-### Etapa 4 — Edge function `schedule-meeting`
-- Novo arquivo `supabase/functions/schedule-meeting/index.ts` seguindo padrão de `places-enrich`.
-- Renomeia `meetings.jitsi_link` para `meeting_link` via migration ALTER (mantendo dados antigos: `ALTER … RENAME COLUMN`).
-- Chama Google Calendar API `events.insert` com `conferenceDataVersion=1` e `conferenceData.createRequest` → devolve `hangoutLink`.
-- Fallback Jitsi se secrets Google ausentes.
-- Novo modal `ScheduleMeetingWithOutcomeModal` (reusa o `ScheduleMeetingModal` existente se possível), aberto automaticamente quando outcome = `decisor_apresentado`.
+**Fase 1 — Fundamento da Fila (maior impacto):**
+1. View `sdr_work_queue` (SQL) unindo respostas, reuniões, tarefas, follow-ups, novos leads, reativação — com `priority_score` e `bucket`.
+2. Página `/foco` com layout 3 colunas reutilizando `LeadRichProfile` + `LeadActivityTimeline`.
+3. Menu reduzido a 4 itens; `/foco` vira a home pós-login para SDR.
+4. Ações rápidas inline: ligar (resultado + próxima data), WhatsApp, nota, descartar, agendar (drawer).
+5. Atalhos de teclado J/K/C/W/E/M/N/D.
 
-### Etapa 5 — Enrollment em cadência
-Nova função utilitária `enrollLeadInCampaign(leadId, campaignSlug)` em `src/lib/campaign-enroll.ts`. Lê `email_campaigns` por slug, lê `email_steps`, insere N rows em `email_sends` com `scheduled_at` computado. Verifica duplicidade (`WHERE lead_id=… AND campaign_id=… AND status IN ('pending','sent')`). Chamada dentro do handler da Etapa 2 para os outcomes `pediu_apresentacao` (slug `apresentacao-institucional`) e `sem_resposta` (slug `recaptura-pos-silencio`).
+**Fase 2 — Automações que empurram trabalho:**
+6. Regras de próxima ação automática (canal alternado, follow-up pós e-mail, preparo pré-reunião).
+7. Resposta em `email_inbox` sobe para o topo com badge visual.
+8. E-mail rápido em popover dentro do Foco (reutiliza `BlockEditor`).
 
-**Nota:** vou precisar checar se `email_campaigns` tem coluna `slug` (senão, adiciono via migration nesta etapa) e se as duas campanhas já existem (senão, alerto e não crio automaticamente).
+**Fase 3 — Polimento e volume:**
+9. Densidade visual: badges de canal, último contato, próxima ação em cada card.
+10. Busca global (⌘K) que abre qualquer lead no painel do Foco sem trocar de página.
+11. Modo lista virtualizada em `/leads` para milhares de registros.
+12. Métricas de dia no header do Foco (substituem `/dashboard` para SDR).
 
-### Etapa 6 — Card de reativação no Dashboard
-Adicionar 4º card no grid do `ProspeccaoDashboard.tsx` (grid vira `md:grid-cols-4`). Chama `supabase.rpc('leads_para_reativar')` e mostra top 5 com botão "Reabrir contato" que:
-- UPDATE `leads` set `status='novo'`, `is_suppressed=false`, `next_contact_date=null`
-- INSERT em `lead_timeline` com o outcome anterior preservado (`event_type='reactivation'`, `metadata: { previous_outcome, previous_loss_reason }`)
+## Mudanças com maior impacto na produtividade
+1. **Fila unificada** — elimina a decisão "o que faço agora?".
+2. **Ações inline sem modal** — corta 3–5 cliques por lead.
+3. **Atalhos de teclado** — permite ritmo de 60–100 leads/dia sem cansaço.
+4. **Auto-advance após ação** — remove tempo morto entre leads.
+5. **Menu de 4 itens** — reduz carga cognitiva.
 
-### Etapa 7 — Edge function `site-email-scrape`
-- Fetch da home + `/contato` (2 tentativas paralelas, timeout 5s cada).
-- Regex `mailto:` (confidence=high) e `[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}` (medium), filtrando lixo (`example.com`, `sentry.io`, `wixpress.com`).
-- Cache em `sessionStorage` por website URL no frontend.
-- Chamada automática no `useEffect` do card com `item.website`, mostrando pill "e-mail encontrado" com botão copiar + input editável.
-
-### Etapa 8 — WhatsApp personalizado + timeline
-- Nova função `buildWhatsAppMessage(item)` usando template com `item.category` e `item.city`.
-- Após `window.open(...)`, insert em `lead_timeline` com `contact_type='whatsapp'`, `event_type='outbound_attempt'`.
-
----
-
-## Ordem de execução
-
-Faço 1 → 3 → 5 → 6 → 7 → 8 → 2 → 4, porque a Etapa 2 depende do enrollment (Etapa 5) e do modal de agendamento (Etapa 4). Cada etapa vai num turno separado com verificação (build, spot-check via edge function curl).
-
-**Aguardo as respostas às 3 perguntas para começar pela Etapa 1.**
+## Confirmação antes de codar
+Antes de implementar, preciso do seu OK em três pontos:
+- (a) Aceita reduzir o menu do SDR a 4 itens e transformar `/foco` na home pós-login?
+- (b) Fase 1 sozinha primeiro (valida a Fila com dados reais) ou Fases 1+2 juntas?
+- (c) Manter `/reunioes` e `/calendario` acessíveis por URL direta (só saem do menu) — confirma?
