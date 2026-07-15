@@ -1169,6 +1169,25 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      sdr_work_queue: {
+        Args: never
+        Returns: {
+          bucket: string
+          due_at: string
+          extra: Json
+          item_key: string
+          lead_city: string
+          lead_email: string
+          lead_id: string
+          lead_name: string
+          lead_phone: string
+          lead_state: string
+          lead_status: string
+          priority: number
+          source: string
+          title: string
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "sdr" | "gerente" | "motorista"
