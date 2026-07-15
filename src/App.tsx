@@ -20,6 +20,7 @@ const Calendario = lazy(() => import("./pages/Calendario"));
 const Reunioes = lazy(() => import("./pages/Reunioes"));
 const Automacao = lazy(() => import("./pages/Automacao"));
 const AuditoriaSDR = lazy(() => import("./pages/AuditoriaSDR"));
+const Foco = lazy(() => import("./pages/Foco"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -41,6 +42,14 @@ const App = () => (
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/auth" element={<Auth />} />
+                <Route
+                  path="/foco"
+                  element={
+                    <ProtectedRoute roles={["admin", "sdr", "gerente"]}>
+                      <Foco />
+                    </ProtectedRoute>
+                  }
+                />
                 <Route
                   path="/dashboard"
                   element={
