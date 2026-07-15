@@ -133,7 +133,12 @@ export default function Leads() {
       const { data, error } = await query;
       if (error) throw error;
       const rows = (data as unknown as LeadExt[]) || [];
-      setLeads(prev => append ? [...prev, ...rows] : rows);
+      setLeads(prev => {
+        if (!append) return rows;
+        const merged = new Map(prev.map(l => [l.id, l]));
+        for (const r of rows) merged.set(r.id, r);
+        return Array.from(merged.values());
+      });
       const hasMore = rows.length === PAGE_SIZE;
       if (which === 'pipeline') setPipelineHasMore(hasMore);
       else setDiscardedHasMore(hasMore);
