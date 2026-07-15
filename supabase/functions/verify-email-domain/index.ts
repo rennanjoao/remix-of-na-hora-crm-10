@@ -92,7 +92,6 @@ Deno.serve(async (req) => {
           // Store signing secret via Supabase Vault-style env: we can't set env vars from code,
           // so persist it in the row for the inbound function to consume. In production, prefer
           // Vault; here we log for admin visibility.
-          update.dns_records = update.dns_records
           ;(update as Record<string, unknown>).webhook_signing_secret = whData.signing_secret
         }
       } else {
