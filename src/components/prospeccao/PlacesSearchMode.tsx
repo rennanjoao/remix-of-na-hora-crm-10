@@ -64,6 +64,18 @@ function logoFromWebsite(website: string | null): string | null {
     return `https://logo.clearbit.com/${url.hostname}`;
   } catch { return null; }
 }
+function getDomain(website: string | null): string | null {
+  if (!website) return null;
+  try {
+    const url = new URL(website.startsWith('http') ? website : `https://${website}`);
+    return url.hostname.replace(/^www\./, '').toLowerCase();
+  } catch { return null; }
+}
+function isSuppressionActive(nextContactDate: string | null): boolean {
+  // No date recorded = suppressed indefinitely. A date in the future = still suppressed.
+  if (!nextContactDate) return true;
+  return new Date(nextContactDate) >= new Date(new Date().toDateString());
+}
 function addDays(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() + days);
@@ -138,35 +150,65 @@ export function PlacesSearchMode() {
   const [emailOverrides, setEmailOverrides] = useState<Map<string, string>>(new Map());
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
   const [scheduleFor, setScheduleFor] = useState<{ id: string; razao_social: string; nome_fantasia: string | null; email: string | null; telefone: string | null } | null>(null);
-  const [leadInfoByPlace, setLeadInfoByPlace] = useState<Map<string, { status: string; contact_outcome: string | null }>>(new Map());
+  const [leadInfoByPlace, setLeadInfoByPlace] = useState<Map<string, { status: string; contact_outcome: string | null; is_suppressed: boolean; next_contact_date: string | null }>>(new Map());
   const [statusTab, setStatusTab] = useState<'todos' | 'novos' | 'trabalhados'>('todos');
   const [emailFilter, setEmailFilter] = useState<'todos' | 'com_email' | 'sem_email'>('todos');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [suppressedDomains, setSuppressedDomains] = useState<Set<string>>(new Set());
   const scrapedRequested = useRef<Set<string>>(new Set());
 
-  // Hydrate imported/outcome info from DB whenever results change
+  // Hydrate imported/outcome/suppression info from DB whenever results change
   useEffect(() => {
     const ids = results.map(r => r.place_id);
     if (ids.length === 0) return;
     let cancelled = false;
     (async () => {
       const { data } = await supabase.from('leads')
-        .select('id, place_id, status, contact_outcome')
+        .select('id, place_id, status, contact_outcome, is_suppressed, next_contact_date')
         .in('place_id', ids);
       if (cancelled || !data) return;
-      const nextInfo = new Map<string, { status: string; contact_outcome: string | null }>();
+      const nextInfo = new Map<string, { status: string; contact_outcome: string | null; is_suppressed: boolean; next_contact_date: string | null }>();
       const nextImported = new Set<string>();
       const nextIds = new Map<string, string>();
       for (const l of data) {
         if (!l.place_id) continue;
-        nextInfo.set(l.place_id, { status: l.status ?? 'novo', contact_outcome: l.contact_outcome ?? null });
+        nextInfo.set(l.place_id, {
+          status: l.status ?? 'novo',
+          contact_outcome: l.contact_outcome ?? null,
+          is_suppressed: !!l.is_suppressed,
+          next_contact_date: l.next_contact_date ?? null,
+        });
         nextImported.add(l.place_id);
         nextIds.set(l.place_id, l.id);
       }
       setLeadInfoByPlace(prev => { const m = new Map(prev); nextInfo.forEach((v, k) => m.set(k, v)); return m; });
       setImportedIds(prev => new Set([...prev, ...nextImported]));
       setLeadIdByPlace(prev => { const m = new Map(prev); nextIds.forEach((v, k) => m.set(k, v)); return m; });
+    })();
+    return () => { cancelled = true; };
+  }, [results]);
+
+  // Domain-level suppression: catches companies already suppressed under a
+  // DIFFERENT place_id (e.g. a branch listing) so we don't re-approach them
+  // just because this particular Google Places entry looks new.
+  useEffect(() => {
+    const domains = new Set<string>();
+    for (const r of results) { const d = getDomain(r.website); if (d) domains.add(d); }
+    if (domains.size === 0) { setSuppressedDomains(new Set()); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from('leads')
+        .select('website, next_contact_date')
+        .eq('is_suppressed', true)
+        .not('website', 'is', null);
+      if (cancelled || !data) return;
+      const set = new Set<string>();
+      for (const row of data) {
+        const d = getDomain(row.website as string | null);
+        if (d && domains.has(d) && isSuppressionActive(row.next_contact_date as string | null)) set.add(d);
+      }
+      setSuppressedDomains(set);
     })();
     return () => { cancelled = true; };
   }, [results]);
@@ -223,10 +265,17 @@ export function PlacesSearchMode() {
     return (scrapedEmails.get(placeId)?.length ?? 0) > 0;
   };
 
+  const isCurrentlySuppressed = (item: PlaceItem): boolean => {
+    const info = leadInfoByPlace.get(item.place_id);
+    if (info?.is_suppressed && isSuppressionActive(info.next_contact_date)) return true;
+    const domain = getDomain(item.website);
+    return !!domain && suppressedDomains.has(domain);
+  };
+
   // Zone/status filter only — deliberately NOT filtered by email yet, so scraping
   // (below) keeps running on every candidate and the email filter can react as
   // results come in, instead of permanently hiding items before they're checked.
-  const baseResults = useMemo(() => {
+  const zoneStatusFiltered = useMemo(() => {
     return results
       .filter(r => !discardedIds.has(r.place_id))
       .filter(r => !activeZone || matchesZone(r, activeZone))
@@ -236,6 +285,16 @@ export function PlacesSearchMode() {
         return statusTab === 'novos' ? !imported : imported;
       });
   }, [results, discardedIds, activeZone, statusTab, importedIds]);
+
+  // Companies already suppressed (own record or same website domain under a
+  // different place_id) are kept out of the working list entirely — that's
+  // "não poluída" prospecting: don't let the SDR re-approach a burned contact.
+  const baseResults = useMemo(
+    () => zoneStatusFiltered.filter(r => !isCurrentlySuppressed(r)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [zoneStatusFiltered, leadInfoByPlace, suppressedDomains],
+  );
+  const hiddenBySuppression = zoneStatusFiltered.length - baseResults.length;
 
   const emailCounts = useMemo(() => {
     let com = 0;
@@ -365,7 +424,12 @@ export function PlacesSearchMode() {
       const { error } = await supabase.from('leads').update(patch as never).eq('id', leadId);
       if (error) throw error;
       const prevInfo = leadInfoByPlace.get(item.place_id);
-      setLeadInfoByPlace(prev => new Map(prev).set(item.place_id, { status: outcome.status, contact_outcome: outcome.id }));
+      setLeadInfoByPlace(prev => new Map(prev).set(item.place_id, {
+        status: outcome.status,
+        contact_outcome: outcome.id,
+        is_suppressed: outcome.is_suppressed,
+        next_contact_date: outcome.next_days ? addDays(outcome.next_days) : null,
+      }));
 
       await supabase.from('lead_timeline').insert({
         lead_id: leadId,
@@ -696,14 +760,20 @@ export function PlacesSearchMode() {
     () => results.filter(r => selectedIds.has(r.place_id)),
     [results, selectedIds],
   );
-  const buildBulkTargets = (): BulkEmailTarget[] => selectedItems.map(item => ({
-    place_id: item.place_id,
-    display_name: item.display_name,
-    email: emailOverrides.get(item.place_id) ?? scrapedEmails.get(item.place_id)?.[0]?.email ?? null,
-    lead_id: leadIdByPlace.get(item.place_id) ?? null,
-    photo_name: item.photos[0]?.name ?? null,
-    fallback_url: logoFromWebsite(item.website),
-  }));
+  const buildBulkTargets = (): BulkEmailTarget[] => selectedItems.map(item => {
+    const override = emailOverrides.get(item.place_id);
+    const scraped = scrapedEmails.get(item.place_id)?.[0] ?? null;
+    return {
+      place_id: item.place_id,
+      display_name: item.display_name,
+      email: override ?? scraped?.email ?? null,
+      email_confidence: override ? 'manual' : scraped?.confidence ?? null,
+      website: item.website,
+      lead_id: leadIdByPlace.get(item.place_id) ?? null,
+      photo_name: item.photos[0]?.name ?? null,
+      fallback_url: logoFromWebsite(item.website),
+    };
+  });
   const ensureLeadForBulk = async (place_id: string): Promise<string | null> => {
     const item = results.find(r => r.place_id === place_id);
     if (!item) return null;
@@ -787,6 +857,7 @@ export function PlacesSearchMode() {
           <div className="flex items-center justify-between gap-2 flex-wrap px-1">
             <div className="text-xs text-muted-foreground">
               Exibindo {visibleResults.length} de {results.length} resultados
+              {hiddenBySuppression > 0 && ` • ${hiddenBySuppression} ocultos (já suprimidos)`}
               {activeZone && ` • Zona: ${ZONES.find(z => z.id === activeZone)?.label}`}
             </div>
             <div className="flex items-center gap-2">
