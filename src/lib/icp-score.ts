@@ -71,7 +71,7 @@ export function scoreIcp(input: IcpInput): IcpScore {
     if (termWords.length > 0) {
       const hits = termWords.filter(w => catWords.has(w)).length;
       const ratio = hits / termWords.length;
-      sector = ratio >= 0.6 ? 25 : ratio > 0 ? 15 : 5;
+      sector = ratio >= 0.5 ? 25 : ratio > 0 ? 15 : 5;
     }
   }
 
