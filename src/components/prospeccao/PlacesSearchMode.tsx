@@ -403,21 +403,10 @@ export function PlacesSearchMode() {
           metadata: { place_id: item.place_id, source: 'places' },
         });
 
-        // Auto-enriquecimento CNPJ em background — lead do Places raramente já traz CNPJ,
-        // e não queremos bloquear o clique de "Importar" esperando a Receita Federal.
-        // Se o cnpj-enrich achar dados, ele mesmo faz UPDATE em leads.
-        void supabase.functions
-          .invoke('cnpj-enrich', {
-            body: {
-              lead_id: leadId,
-              razao_social: item.display_name,
-              cidade: item.city,
-              estado: item.state,
-              website: item.website,
-              phone: normalizePhone(item.phone),
-            },
-          })
-          .catch(err => console.warn('cnpj-enrich background falhou', err));
+        // NOTA: auto-enriquecimento CNPJ do plano fica pendente — a edge `cnpj-enrich`
+        // só aceita CNPJ (não faz reverse lookup por nome/site). Leads do Places quase
+        // nunca vêm com CNPJ, então chamar aqui geraria só 400s. Precisa de uma etapa
+        // nova (reverse lookup por CNAE + razão social + cidade) antes de reativar.
 
         if (!opts.silent) toast.success('Lead importado para o funil!');
       }
