@@ -1,0 +1,1 @@
+ALTER VIEW public.duplicate_lead_candidates SET (security_invoker = true);
