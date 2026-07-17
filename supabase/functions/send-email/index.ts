@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
     // --- 1. Resolve verified sender domain
     const { data: domain } = await supabase
       .from('email_domains')
-      .select('domain, status')
+      .select('id, domain, status, daily_limit, daily_send_count, daily_count_reset_date')
       .eq('status', 'verified')
       .order('verified_at', { ascending: false })
       .limit(1)
@@ -61,6 +61,27 @@ Deno.serve(async (req) => {
       }), { status: 412, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     const fromAddress = `Na Hora Transporte <no-reply@${domain.domain}>`;
+
+    // --- 1b. Rate limit diário por domínio remetente (protege reputação).
+    // Testes ignoram o contador para não estourar cota validando o setup.
+    if (!test) {
+      const { data: quotaOk, error: quotaErr } = await supabase.rpc('try_consume_email_quota', { _domain_id: domain.id });
+      if (quotaErr) throw quotaErr;
+      if (!quotaOk) {
+        if (send_id) {
+          await supabase.from('email_sends').update({
+            status: 'pending',
+            last_error: `daily_limit_reached (${domain.daily_limit}/dia)`,
+            scheduled_for: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          }).eq('id', String(send_id));
+        }
+        return new Response(JSON.stringify({
+          success: false,
+          error: `Limite diário de ${domain.daily_limit} e-mails atingido para o domínio ${domain.domain}. Reagendado para amanhã.`,
+          rate_limited: true,
+        }), { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
 
     // --- 2. Suppression list
     if (!test) {

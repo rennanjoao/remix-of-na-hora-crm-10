@@ -152,6 +152,9 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          daily_count_reset_date: string
+          daily_limit: number
+          daily_send_count: number
           dns_records: Json | null
           domain: string
           id: string
@@ -165,6 +168,9 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          daily_count_reset_date?: string
+          daily_limit?: number
+          daily_send_count?: number
           dns_records?: Json | null
           domain: string
           id?: string
@@ -178,6 +184,9 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          daily_count_reset_date?: string
+          daily_limit?: number
+          daily_send_count?: number
           dns_records?: Json | null
           domain?: string
           id?: string
@@ -920,6 +929,54 @@ export type Database = {
         }
         Relationships: []
       }
+      saved_searches: {
+        Row: {
+          created_at: string
+          email_filter: string | null
+          id: string
+          name: string
+          query: string
+          sdr_id: string
+          updated_at: string
+          zone: string | null
+        }
+        Insert: {
+          created_at?: string
+          email_filter?: string | null
+          id?: string
+          name: string
+          query: string
+          sdr_id: string
+          updated_at?: string
+          zone?: string | null
+        }
+        Update: {
+          created_at?: string
+          email_filter?: string | null
+          id?: string
+          name?: string
+          query?: string
+          sdr_id?: string
+          updated_at?: string
+          zone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_searches_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saved_searches_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: false
+            referencedRelation: "sdr_performance_daily"
+            referencedColumns: ["sdr_id"]
+          },
+        ]
+      }
       suppressed_emails: {
         Row: {
           email: string
@@ -1045,6 +1102,16 @@ export type Database = {
       }
     }
     Views: {
+      duplicate_lead_candidates: {
+        Row: {
+          lead_a_id: string | null
+          lead_a_name: string | null
+          lead_b_id: string | null
+          lead_b_name: string | null
+          match_type: string | null
+        }
+        Relationships: []
+      }
       sdr_performance_daily: {
         Row: {
           consultas_realizadas: number | null
@@ -1169,6 +1236,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      merge_leads: {
+        Args: { _loser: string; _winner: string }
+        Returns: undefined
+      }
       sdr_work_queue: {
         Args: never
         Returns: {
@@ -1187,6 +1258,10 @@ export type Database = {
           source: string
           title: string
         }[]
+      }
+      try_consume_email_quota: {
+        Args: { _domain_id: string }
+        Returns: boolean
       }
     }
     Enums: {
