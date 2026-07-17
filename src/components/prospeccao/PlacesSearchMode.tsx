@@ -895,6 +895,7 @@ export function PlacesSearchMode() {
               <Select value={sortMode} onValueChange={(v: SortMode) => setSortMode(v)}>
                 <SelectTrigger className="h-8 w-[200px] text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="fit">Ordenar por fit (recomendado)</SelectItem>
                   <SelectItem value="relevance">Relevância (padrão Google)</SelectItem>
                   <SelectItem value="rating">Mais bem avaliados</SelectItem>
                   <SelectItem value="reviews">Maior nº de avaliações</SelectItem>
