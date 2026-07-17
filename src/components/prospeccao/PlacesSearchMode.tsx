@@ -123,11 +123,13 @@ const CONTACT_OUTCOMES: OutcomeConfig[] = [
   { id: 'decisor_apresentado', label: 'Falou com decisor, apresentou serviço', short: 'Decisor OK', status: 'qualificado', is_suppressed: false, next_days: null, set_loss_reason: false, hint: 'Abre agendamento' },
 ];
 
-type SortMode = 'relevance' | 'rating' | 'reviews';
+type SortMode = 'relevance' | 'rating' | 'reviews' | 'fit';
 type ViewMode = 'grid' | 'list';
 
 interface ScrapedEmail { email: string; confidence: 'high' | 'medium' }
 const emailCache = new Map<string, ScrapedEmail[]>();
+
+import { scoreIcp, type IcpScore } from '@/lib/icp-score';
 
 export function PlacesSearchMode() {
   const { profile } = useAuth();
