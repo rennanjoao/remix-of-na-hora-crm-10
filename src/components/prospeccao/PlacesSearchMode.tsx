@@ -304,6 +304,26 @@ export function PlacesSearchMode() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseResults, scrapedEmails, emailOverrides]);
 
+  // Score ICP por lead — usa termo pesquisado + rating + reviews + confiança do e-mail.
+  const icpByPlace = useMemo(() => {
+    const m = new Map<string, IcpScore>();
+    for (const r of baseResults) {
+      const override = emailOverrides.get(r.place_id);
+      const scraped = scrapedEmails.get(r.place_id);
+      const emailConf: 'high' | 'medium' | 'manual' | null =
+        override ? 'manual' : (scraped?.[0]?.confidence ?? null);
+      m.set(r.place_id, scoreIcp({
+        rating: r.rating,
+        ratingCount: r.rating_count,
+        emailConfidence: emailConf,
+        searchTerm: lastQuery || query,
+        category: r.category,
+      }));
+    }
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseResults, scrapedEmails, emailOverrides, lastQuery]);
+
   const visibleResults = useMemo(() => {
     const filtered = baseResults.filter(r => {
       if (emailFilter === 'todos') return true;
@@ -312,9 +332,12 @@ export function PlacesSearchMode() {
     });
     if (sortMode === 'rating') return [...filtered].sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
     if (sortMode === 'reviews') return [...filtered].sort((a, b) => (b.rating_count ?? -1) - (a.rating_count ?? -1));
+    if (sortMode === 'fit') return [...filtered].sort((a, b) =>
+      (icpByPlace.get(b.place_id)?.total ?? 0) - (icpByPlace.get(a.place_id)?.total ?? 0),
+    );
     return filtered;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseResults, sortMode, emailFilter, scrapedEmails, emailOverrides]);
+  }, [baseResults, sortMode, emailFilter, scrapedEmails, emailOverrides, icpByPlace]);
 
   // Auto-scrape emails for every candidate with a website (independent of the
   // email filter, so filtering by "com e-mail" doesn't starve its own data source)
