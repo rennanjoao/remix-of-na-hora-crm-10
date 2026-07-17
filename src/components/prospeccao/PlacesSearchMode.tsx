@@ -129,8 +129,6 @@ type ViewMode = 'grid' | 'list';
 interface ScrapedEmail { email: string; confidence: 'high' | 'medium' }
 const emailCache = new Map<string, ScrapedEmail[]>();
 
-import { scoreIcp, type IcpScore } from '@/lib/icp-score';
-
 export function PlacesSearchMode() {
   const { profile } = useAuth();
   const [query, setQuery] = useState('');
