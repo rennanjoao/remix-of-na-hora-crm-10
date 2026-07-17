@@ -23,6 +23,7 @@ import { logLeadActivity } from '@/lib/lead-activities';
 import { ScheduleMeetingModal } from '@/components/ScheduleMeetingModal';
 import { BulkEmailModal, type BulkEmailTarget } from './BulkEmailModal';
 import { FacadeImageGrid } from './FacadeImageGrid';
+import { scoreIcp, type IcpScore } from '@/lib/icp-score';
 
 interface PlaceItem {
   place_id: string;
