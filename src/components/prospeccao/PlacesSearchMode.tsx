@@ -661,13 +661,40 @@ export function PlacesSearchMode() {
             <div className="min-w-0 flex-1 space-y-1.5">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <h3 className="font-semibold text-sm leading-tight truncate">{item.display_name}</h3>
+                  <h3 className="font-semibold text-sm leading-tight truncate flex items-center gap-1.5">
+                    <span className="truncate">{item.display_name}</span>
+                    {/* Dot pulsante enquanto o e-mail do site está sendo raspado */}
+                    {item.website && !scrapedEmails.has(item.place_id) && (
+                      <span
+                        className="inline-block h-1.5 w-1.5 rounded-full bg-primary animate-pulse shrink-0"
+                        title="Buscando e-mail no site…"
+                      />
+                    )}
+                  </h3>
                   {item.category && <p className="text-xs text-muted-foreground truncate">{item.category}</p>}
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   {(() => { const b = getStatusBadge(item.place_id); return (
                     <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-5 ${b.className}`}>{b.label}</Badge>
                   ); })()}
+                  {(() => {
+                    const s = icpByPlace.get(item.place_id);
+                    if (!s) return null;
+                    const cls = s.tier === 'A'
+                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                      : s.tier === 'B'
+                      ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30'
+                      : 'bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/30';
+                    return (
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] px-1.5 py-0 h-5 ${cls}`}
+                        title={`Fit ${s.tier} — rating ${s.breakdown.rating} · reviews ${s.breakdown.reviews} · e-mail ${s.breakdown.email} · setor ${s.breakdown.sector}`}
+                      >
+                        Fit {s.tier} · {s.total}
+                      </Badge>
+                    );
+                  })()}
                   {item.rating != null && (
                     <Badge variant="outline" className="gap-1 text-xs">
                       <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
