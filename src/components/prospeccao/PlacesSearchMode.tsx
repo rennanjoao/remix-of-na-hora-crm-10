@@ -402,6 +402,23 @@ export function PlacesSearchMode() {
           description: `Importado do Google Places: ${item.display_name ?? 'sem nome'}`,
           metadata: { place_id: item.place_id, source: 'places' },
         });
+
+        // Auto-enriquecimento CNPJ em background — lead do Places raramente já traz CNPJ,
+        // e não queremos bloquear o clique de "Importar" esperando a Receita Federal.
+        // Se o cnpj-enrich achar dados, ele mesmo faz UPDATE em leads.
+        void supabase.functions
+          .invoke('cnpj-enrich', {
+            body: {
+              lead_id: leadId,
+              razao_social: item.display_name,
+              cidade: item.city,
+              estado: item.state,
+              website: item.website,
+              phone: normalizePhone(item.phone),
+            },
+          })
+          .catch(err => console.warn('cnpj-enrich background falhou', err));
+
         if (!opts.silent) toast.success('Lead importado para o funil!');
       }
       return leadId;
