@@ -119,7 +119,7 @@ Deno.serve(async (req) => {
     let sendRow: { id: string; tracking_id: string; unsubscribe_token: string | null };
     if (send_id) {
       const { data, error } = await supabase.from('email_sends')
-        .update({ status: 'enviando', attempts: 0 })
+        .update({ status: 'enviando' })
         .eq('id', String(send_id))
         .select('id, tracking_id, unsubscribe_token')
         .single();
