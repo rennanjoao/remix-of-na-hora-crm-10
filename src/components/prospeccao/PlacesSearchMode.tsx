@@ -13,7 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import {
   Loader2, Search, MapPin, Star, Phone, Globe, Download, MessageCircle,
   ExternalLink, Sparkles, Flag, Building2, LayoutGrid, List as ListIcon,
-  Mail, Copy, Check, Users, Send, CheckSquare, Square,
+  Mail, Copy, Check, Users, Send, CheckSquare, Square, Clock, ClipboardList,
+  Radar,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
@@ -39,6 +40,11 @@ interface PlaceItem {
   city: string | null;
   state: string | null;
   neighborhood: string | null;
+  postal_code: string | null;
+  types: string[] | null;
+  open_now: boolean | null;
+  opening_hours: string[] | null;
+  price_level: string | null;
   photos: { name: string; width: number; height: number }[];
 }
 
@@ -157,6 +163,7 @@ export function PlacesSearchMode() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
   const [suppressedDomains, setSuppressedDomains] = useState<Set<string>>(new Set());
+  const [expanding, setExpanding] = useState<{ current: number; total: number } | null>(null);
   const scrapedRequested = useRef<Set<string>>(new Set());
 
   // Hydrate imported/outcome/suppression info from DB whenever results change
@@ -225,6 +232,23 @@ export function PlacesSearchMode() {
     return { label: 'Importado', className: 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/30' };
   };
 
+  const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+  // Single Text Search page fetch — returns raw items + next token, no state writes.
+  const fetchPlacesPage = async (textQuery: string, token: string | null = null): Promise<{ items: PlaceItem[]; nextToken: string | null }> => {
+    const { data, error } = await supabase.functions.invoke('places-enrich', {
+      body: { text_query: textQuery, max_results: 20, ...(token ? { page_token: token } : {}) },
+    });
+    if (error) throw new Error(error.message);
+    return { items: (data?.results || []) as PlaceItem[], nextToken: data?.next_page_token || null };
+  };
+
+  const mergeResults = (prev: PlaceItem[], incoming: PlaceItem[]): PlaceItem[] => {
+    const merged = new Map(prev.map(r => [r.place_id, r]));
+    for (const it of incoming) merged.set(it.place_id, it);
+    return Array.from(merged.values());
+  };
+
   const runSearch = async (q: string, append = false, token: string | null = null) => {
     const term = q.trim();
     if (term.length < 3) { toast.error('Digite ao menos 3 caracteres'); return; }
@@ -232,25 +256,63 @@ export function PlacesSearchMode() {
     if (!append) { setDiscardedIds(new Set()); setResults([]); setNextPageToken(null); }
     try {
       const normalized = normalizeText(term);
-      const { data, error } = await supabase.functions.invoke('places-enrich', {
-        body: { text_query: normalized, max_results: 20, ...(token ? { page_token: token } : {}) },
-      });
-      if (error) throw new Error(error.message);
-      const items = (data?.results || []) as PlaceItem[];
-      setResults(prev => {
-        if (!append) return items;
-        const merged = new Map(prev.map(r => [r.place_id, r]));
-        for (const it of items) merged.set(it.place_id, it);
-        return Array.from(merged.values());
-      });
-      setNextPageToken(data?.next_page_token || null);
+      const { items, nextToken } = await fetchPlacesPage(normalized, token);
+      setResults(prev => append ? mergeResults(prev, items) : items);
+      setNextPageToken(nextToken);
       setLastQuery(term);
       if (!append && items.length === 0) toast.info('Nenhum resultado encontrado');
+
+      // Auto-amplia: sem precisar clicar em "carregar mais", já busca as
+      // próximas páginas automaticamente (Google permite até 3 páginas / 60
+      // resultados por termo — exige um pequeno intervalo antes do token valer).
+      if (!append && nextToken) {
+        let currentToken: string | null = nextToken;
+        let pagesLoaded = 1;
+        while (currentToken && pagesLoaded < 3) {
+          await sleep(2200);
+          const page = await fetchPlacesPage(normalized, currentToken);
+          setResults(prev => mergeResults(prev, page.items));
+          setNextPageToken(page.nextToken);
+          currentToken = page.nextToken;
+          pagesLoaded++;
+        }
+      }
     } catch (err) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : 'Erro na busca');
     } finally {
       setLoading(false); setLoadingMore(false);
+    }
+  };
+
+  // Amplia a prospecção além do limite de 60 resultados do Google por termo:
+  // repete a mesma busca combinada com cada zona de SP e funde os resultados
+  // (dedup por place_id). Cada zona busca só a 1ª página (20) para manter custo/tempo previsíveis.
+  const expandSearchAllZones = async () => {
+    const term = (lastQuery || query).trim();
+    if (term.length < 3) { toast.error('Faça uma busca primeiro'); return; }
+    const zonesToRun = ZONES.filter(z => z.id !== 'interior');
+    setExpanding({ current: 0, total: zonesToRun.length });
+    let added = 0;
+    try {
+      for (let i = 0; i < zonesToRun.length; i++) {
+        const zone = zonesToRun[i];
+        try {
+          const { items } = await fetchPlacesPage(normalizeText(`${term} ${zone.label} Sao Paulo`));
+          setResults(prev => {
+            const before = prev.length;
+            const next = mergeResults(prev, items);
+            added += next.length - before;
+            return next;
+          });
+        } catch (err) {
+          console.error(`Falha ao ampliar na ${zone.label}:`, err);
+        }
+        setExpanding({ current: i + 1, total: zonesToRun.length });
+      }
+      toast.success(added > 0 ? `+${added} novos resultados encontrados` : 'Nenhum resultado novo nas outras zonas');
+    } finally {
+      setExpanding(null);
     }
   };
 
@@ -593,6 +655,24 @@ export function PlacesSearchMode() {
     } catch { /* ignore */ }
   };
 
+  const getEmailFor = (placeId: string): string | null =>
+    emailOverrides.get(placeId) ?? scrapedEmails.get(placeId)?.[0]?.email ?? null;
+
+  // Copia todos os e-mails dos resultados visíveis (respeitando filtros atuais)
+  // de uma vez, separados por vírgula — pronto para colar em Gmail, planilha, etc.
+  const copyAllEmails = async () => {
+    const emails = Array.from(new Set(
+      visibleResults.map(r => getEmailFor(r.place_id)).filter((e): e is string => !!e),
+    ));
+    if (emails.length === 0) { toast.info('Nenhum e-mail nos resultados visíveis'); return; }
+    try {
+      await navigator.clipboard.writeText(emails.join(', '));
+      toast.success(`${emails.length} e-mail(s) copiados`);
+    } catch {
+      toast.error('Não foi possível copiar — copie manualmente');
+    }
+  };
+
   const renderEmailPill = (item: PlaceItem) => {
     const emails = scrapedEmails.get(item.place_id);
     if (!emails || emails.length === 0) return null;
@@ -708,12 +788,20 @@ export function PlacesSearchMode() {
                       {item.rating_count ? <span className="text-muted-foreground">({item.rating_count})</span> : null}
                     </Badge>
                   )}
+                  {item.open_now != null && (
+                    <Badge variant="outline" className={`gap-1 text-[10px] px-1.5 py-0 h-5 ${item.open_now ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' : 'bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/30'}`}>
+                      <Clock className="h-3 w-3" />{item.open_now ? 'Aberto agora' : 'Fechado'}
+                    </Badge>
+                  )}
                 </div>
               </div>
               {item.formatted_address && (
                 <p className="text-xs text-muted-foreground flex items-start gap-1">
                   <MapPin className="h-3 w-3 mt-0.5 shrink-0" />
-                  <span className="line-clamp-2">{item.formatted_address}</span>
+                  <span className="line-clamp-2">
+                    {item.formatted_address}
+                    {item.postal_code && <span className="text-muted-foreground/70"> · CEP {item.postal_code}</span>}
+                  </span>
                 </p>
               )}
               <div className="flex flex-wrap gap-1.5">
@@ -918,12 +1006,19 @@ export function PlacesSearchMode() {
               {activeZone && ` • Zona: ${ZONES.find(z => z.id === activeZone)?.label}`}
             </div>
             <div className="flex items-center gap-2">
+              <Button size="sm" variant="secondary" onClick={expandSearchAllZones} disabled={!!expanding || loading} title="Repete a busca combinando o termo com cada zona de SP para trazer mais resultados além do limite padrão do Google">
+                {expanding ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />Ampliando {expanding.current}/{expanding.total}...</> :
+                  <><Radar className="h-3.5 w-3.5 mr-1" />Ampliar busca (todas as zonas)</>}
+              </Button>
               <Button size="sm" variant="secondary" onClick={handleBatchImport} disabled={!!batch || notImportedCount === 0}>
                 {batch ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />Importando {batch.current} de {batch.total}...</> :
                   <><Users className="h-3.5 w-3.5 mr-1" />Importar todos os visíveis ({notImportedCount})</>}
               </Button>
               <Button size="sm" variant="outline" onClick={selectAllWithEmail} disabled={emailCounts.com === 0}>
                 <Mail className="h-3.5 w-3.5 mr-1" />Selecionar com e-mail ({emailCounts.com})
+              </Button>
+              <Button size="sm" variant="outline" onClick={copyAllEmails} disabled={emailCounts.com === 0} title="Copiar todos os e-mails visíveis, separados por vírgula">
+                <ClipboardList className="h-3.5 w-3.5 mr-1" />Copiar e-mails ({emailCounts.com})
               </Button>
               <Select value={sortMode} onValueChange={(v: SortMode) => setSortMode(v)}>
                 <SelectTrigger className="h-8 w-[200px] text-xs"><SelectValue /></SelectTrigger>
