@@ -18,8 +18,11 @@ interface PlaceSearchItem {
   websiteUri?: string;
   googleMapsUri?: string;
   primaryTypeDisplayName?: { text: string };
+  types?: string[];
   photos?: PlacePhoto[];
   businessStatus?: string;
+  currentOpeningHours?: { openNow?: boolean; weekdayDescriptions?: string[] };
+  priceLevel?: string;
 }
 interface PlaceDetails {
   id: string;
@@ -91,8 +94,12 @@ Deno.serve(async (req) => {
             "places.websiteUri",
             "places.googleMapsUri",
             "places.primaryTypeDisplayName",
+            "places.types",
             "places.photos",
             "places.businessStatus",
+            "places.currentOpeningHours.openNow",
+            "places.currentOpeningHours.weekdayDescriptions",
+            "places.priceLevel",
             "nextPageToken",
           ].join(","),
         },
@@ -132,6 +139,11 @@ Deno.serve(async (req) => {
           city: findComp("administrative_area_level_2"),
           state: findComp("administrative_area_level_1"),
           neighborhood: findComp("sublocality_level_1") ?? findComp("sublocality"),
+          postal_code: findComp("postal_code"),
+          types: (p.types ?? []).slice(0, 6),
+          open_now: p.currentOpeningHours?.openNow ?? null,
+          opening_hours: p.currentOpeningHours?.weekdayDescriptions ?? null,
+          price_level: p.priceLevel ?? null,
           photos: (p.photos ?? []).slice(0, 3).map((ph) => ({
             name: ph.name, width: ph.widthPx, height: ph.heightPx,
           })),
