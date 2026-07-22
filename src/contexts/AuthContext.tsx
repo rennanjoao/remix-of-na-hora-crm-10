@@ -66,7 +66,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    let cancelled = false;
+
     const applySession = async (session: Session | null) => {
+      if (cancelled) return;
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
@@ -75,10 +78,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(null);
         setRole(null);
       }
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     };
 
-    // Set up auth state listener FIRST
+    // onAuthStateChange já dispara imediatamente com a sessão atual
+    // (evento INITIAL_SESSION), então não é preciso chamar getSession()
+    // separadamente — isso estava disparando fetchUserData 2x em todo carregamento.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         // Defer to avoid deadlock inside the auth callback
@@ -86,12 +91,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      applySession(session);
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
