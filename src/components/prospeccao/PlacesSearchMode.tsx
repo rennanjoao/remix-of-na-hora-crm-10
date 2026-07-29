@@ -445,7 +445,18 @@ export function PlacesSearchMode() {
       created_by: sdrId, assigned_to: sdrId,
       status: 'novo', fonte: 'Google Places',
     }).select('id').single();
-    if (error) throw error;
+    if (error) {
+      // 23505 = unique_violation. Duas importações concorrentes passaram pela
+      // checagem acima ao mesmo tempo e o índice único de leads.place_id (ver
+      // migração 20260729175010) barrou a segunda no banco — não é um erro
+      // real para o SDR, é a rede de segurança funcionando. Busca o lead que
+      // "ganhou" a corrida e devolve o id dele normalmente.
+      if ((error as { code?: string }).code === '23505') {
+        const { data: existing } = await supabase.from('leads').select('id').eq('place_id', item.place_id).maybeSingle();
+        if (existing) return existing.id;
+      }
+      throw error;
+    }
     return data.id;
   };
 
@@ -487,13 +498,36 @@ export function PlacesSearchMode() {
     if (targets.length === 0) { toast.info('Todos os visíveis já foram importados'); return; }
     setBatch({ current: 0, total: targets.length });
     let done = 0;
-    await Promise.all(targets.map(async item => {
-      await handleImport(item, { silent: true });
-      done++;
-      setBatch({ current: done, total: targets.length });
-    }));
+    let failed = 0;
+
+    // Concorrência limitada (não Promise.all irrestrito): rodar tudo em paralelo
+    // faz duas linhas com o mesmo telefone/CNPJ passarem pela checagem de duplicata
+    // (SELECT) ao mesmo tempo, antes que o INSERT de qualquer uma delas termine —
+    // e as duas acabam viradas em leads duplicados. Um pool pequeno reduz drasticamente
+    // a janela de corrida mantendo a importação rápida.
+    const CONCURRENCY = 4;
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < targets.length) {
+        const item = targets[cursor++];
+        try {
+          await handleImport(item, { silent: true });
+        } catch (err) {
+          failed++;
+          console.error('Falha ao importar', item.place_id, err);
+        }
+        done++;
+        setBatch({ current: done, total: targets.length });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, worker));
+
     setBatch(null);
-    toast.success(`Importados ${done} de ${targets.length}`);
+    if (failed > 0) {
+      toast.warning(`Importados ${done - failed} de ${targets.length} (${failed} falharam)`);
+    } else {
+      toast.success(`Importados ${done} de ${targets.length}`);
+    }
   };
 
   const applyOutcome = async (item: PlaceItem, outcome: OutcomeConfig) => {
