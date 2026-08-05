@@ -321,7 +321,12 @@ export default function Admin() {
           <TabsContent value="email-domain">
             <EmailDomainManager />
           </TabsContent>
+
+          <TabsContent value="duplicates">
+            <DuplicateLeadsManager />
+          </TabsContent>
         </Tabs>
+
       </div>
     </DashboardLayout>
   );
