@@ -360,6 +360,7 @@ export default function Leads() {
                 <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">{activeFilterCount}</Badge>
               )}
             </Button>
+            <ImportLeadsCsvDialog onImported={() => fetchLeadsPage(tab, 0, false)} />
             <Button variant="outline" onClick={exportAll} className="gap-2">
               <Download className="h-4 w-4" /> Exportar Todos (CSV)
             </Button>
@@ -367,7 +368,8 @@ export default function Leads() {
         </div>
 
         {showFilters && (
-          <Card>
+          <Card className="sticky top-14 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+
             <CardContent className="p-4 space-y-3">
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 <div>
