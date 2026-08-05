@@ -333,7 +333,10 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {(isAdmin || isGerente) && <EmailHealthCard />}
       </div>
+
     </DashboardLayout>
   );
 }
