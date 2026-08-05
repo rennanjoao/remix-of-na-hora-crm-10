@@ -25,6 +25,7 @@ import { ScheduleMeetingModal } from '@/components/ScheduleMeetingModal';
 import { BulkEmailModal, type BulkEmailTarget } from './BulkEmailModal';
 import { FacadeImageGrid } from './FacadeImageGrid';
 import { scoreIcp, type IcpScore } from '@/lib/icp-score';
+import { SavedSearches } from './SavedSearches';
 
 interface PlaceItem {
   place_id: string;
