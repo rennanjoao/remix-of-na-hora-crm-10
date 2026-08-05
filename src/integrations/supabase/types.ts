@@ -681,6 +681,7 @@ export type Database = {
           reactivation_batch: string | null
           setor: string | null
           status: Database["public"]["Enums"]["lead_status"] | null
+          suppression_reason: string | null
           telefone: string | null
           updated_at: string
           website: string | null
@@ -717,6 +718,7 @@ export type Database = {
           reactivation_batch?: string | null
           setor?: string | null
           status?: Database["public"]["Enums"]["lead_status"] | null
+          suppression_reason?: string | null
           telefone?: string | null
           updated_at?: string
           website?: string | null
@@ -753,6 +755,7 @@ export type Database = {
           reactivation_batch?: string | null
           setor?: string | null
           status?: Database["public"]["Enums"]["lead_status"] | null
+          suppression_reason?: string | null
           telefone?: string | null
           updated_at?: string
           website?: string | null
@@ -1157,6 +1160,7 @@ export type Database = {
           reactivation_batch: string | null
           setor: string | null
           status: Database["public"]["Enums"]["lead_status"] | null
+          suppression_reason: string | null
           telefone: string | null
           updated_at: string
           website: string | null
@@ -1224,6 +1228,7 @@ export type Database = {
           reactivation_batch: string | null
           setor: string | null
           status: Database["public"]["Enums"]["lead_status"] | null
+          suppression_reason: string | null
           telefone: string | null
           updated_at: string
           website: string | null
