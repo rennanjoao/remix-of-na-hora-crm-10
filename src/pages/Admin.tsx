@@ -176,7 +176,9 @@ export default function Admin() {
             <TabsTrigger value="users">Usuários</TabsTrigger>
             <TabsTrigger value="scripts">Scripts de Abordagem</TabsTrigger>
             <TabsTrigger value="email-domain">Domínio de E-mail</TabsTrigger>
+            <TabsTrigger value="duplicates">Duplicatas</TabsTrigger>
           </TabsList>
+
 
           <TabsContent value="users">
         <Card>
