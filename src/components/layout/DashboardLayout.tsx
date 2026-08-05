@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
+import { CommandPalette } from './CommandPalette';
 import { useAuthGuard } from '@/hooks/useRoleGuard';
 import { Loader2 } from 'lucide-react';
 
