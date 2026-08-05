@@ -10,6 +10,7 @@ import { format, differenceInMinutes } from 'date-fns';
 import { toast } from 'sonner';
 import { ptBR } from 'date-fns/locale';
 import { LEAD_STATUSES, STATUS_LABELS, type LeadStatus } from '@/lib/kanban-columns';
+import { EmailHealthCard } from '@/components/dashboard/EmailHealthCard';
 
 interface Stats {
   totalLeads: number;
@@ -333,7 +334,10 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {(isAdmin || isGerente) && <EmailHealthCard />}
       </div>
+
     </DashboardLayout>
   );
 }

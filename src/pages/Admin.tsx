@@ -16,6 +16,7 @@ import { Loader2, UserCog, Search, Shield, UserCheck, UserX } from 'lucide-react
 import { CreateUserDialog } from '@/components/admin/CreateUserDialog';
 import { ScriptsManager } from '@/components/admin/ScriptsManager';
 import { EmailDomainManager } from '@/components/admin/EmailDomainManager';
+import { DuplicateLeadsManager } from '@/components/admin/DuplicateLeadsManager';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type AppRole = 'admin' | 'sdr' | 'gerente' | 'motorista';
@@ -175,7 +176,9 @@ export default function Admin() {
             <TabsTrigger value="users">Usuários</TabsTrigger>
             <TabsTrigger value="scripts">Scripts de Abordagem</TabsTrigger>
             <TabsTrigger value="email-domain">Domínio de E-mail</TabsTrigger>
+            <TabsTrigger value="duplicates">Duplicatas</TabsTrigger>
           </TabsList>
+
 
           <TabsContent value="users">
         <Card>
@@ -318,7 +321,12 @@ export default function Admin() {
           <TabsContent value="email-domain">
             <EmailDomainManager />
           </TabsContent>
+
+          <TabsContent value="duplicates">
+            <DuplicateLeadsManager />
+          </TabsContent>
         </Tabs>
+
       </div>
     </DashboardLayout>
   );

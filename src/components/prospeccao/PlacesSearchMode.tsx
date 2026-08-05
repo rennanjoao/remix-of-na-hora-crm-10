@@ -25,6 +25,7 @@ import { ScheduleMeetingModal } from '@/components/ScheduleMeetingModal';
 import { BulkEmailModal, type BulkEmailTarget } from './BulkEmailModal';
 import { FacadeImageGrid } from './FacadeImageGrid';
 import { scoreIcp, type IcpScore } from '@/lib/icp-score';
+import { SavedSearches } from './SavedSearches';
 
 interface PlaceItem {
   place_id: string;
@@ -990,7 +991,19 @@ export function PlacesSearchMode() {
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            <SavedSearches
+              current={{ query, zone: activeZone, emailFilter }}
+              onApply={(s) => {
+                setQuery(s.query);
+                setActiveZone(s.zone);
+                setEmailFilter(s.emailFilter as 'todos' | 'com_email' | 'sem_email');
+                void runSearch(s.query);
+              }}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
             <span className="text-xs text-muted-foreground mr-1">Filtrar zona:</span>
+
             <button type="button" onClick={() => setActiveZone(null)}
               className={`text-xs px-2 py-1 rounded-full border transition ${activeZone === null ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-accent'}`}>
               Todas
