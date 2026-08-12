@@ -17,7 +17,6 @@ import {
 import { LeadActivityTimeline } from '@/components/leads/LeadActivityTimeline';
 import { LeadRichProfile } from '@/components/prospeccao/LeadRichProfile';
 import { ScheduleMeetingModal } from '@/components/ScheduleMeetingModal';
-import { LossReasonDialog } from '@/components/leads/LossReasonDialog';
 import { logLeadActivity } from '@/lib/lead-activities';
 import { getDefaultScript, interpolateScript } from '@/lib/approach-scripts';
 import { cn } from '@/lib/utils';
@@ -29,7 +28,6 @@ interface QueueItem {
   priority: number;
   lead_id: string;
   lead_name: string;
-  lead_cnpj: string | null;
   lead_city: string | null;
   lead_state: string | null;
   lead_phone: string | null;
@@ -62,9 +60,6 @@ export default function Foco() {
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [callResult, setCallResult] = useState<'atendeu' | 'nao_atendeu' | 'caixa' | ''>('');
-  const [callPanelOpen, setCallPanelOpen] = useState(false);
-  const [savingCall, setSavingCall] = useState(false);
-  const [lossOpen, setLossOpen] = useState(false);
   const [nextDate, setNextDate] = useState('');
   const [meetingOpen, setMeetingOpen] = useState(false);
   const [pullingLead, setPullingLead] = useState(false);
@@ -100,7 +95,7 @@ export default function Foco() {
     const idx = items.findIndex(i => i.item_key === activeKey);
     const next = items[(idx + 1) % items.length];
     setActiveKey(next?.item_key ?? null);
-    setNoteOpen(false); setCallResult(''); setCallPanelOpen(false); setNextDate(''); setNoteText('');
+    setNoteOpen(false); setCallResult(''); setNextDate(''); setNoteText('');
   }, [items, activeKey]);
 
   const navigate = useCallback((dir: 1 | -1) => {
@@ -120,10 +115,9 @@ export default function Foco() {
       else if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); navigate(-1); }
       else if (e.key === 'c') { e.preventDefault(); doCall(); }
       else if (e.key === 'w') { e.preventDefault(); void doWhatsApp(); }
-      else if (e.key === 'e') { e.preventDefault(); doEmail(); }
       else if (e.key === 'm') { e.preventDefault(); setMeetingOpen(true); }
       else if (e.key === 'n') { e.preventDefault(); setNoteOpen(true); }
-      else if (e.key === 'd') { e.preventDefault(); setLossOpen(true); }
+      else if (e.key === 'd') { e.preventDefault(); void doDiscard(); }
       else if (e.key === 'ArrowRight') { e.preventDefault(); advance(); }
     };
     window.addEventListener('keydown', handler);
@@ -134,14 +128,7 @@ export default function Foco() {
   const doCall = () => {
     if (!active?.lead_phone) { toast.error('Sem telefone cadastrado'); return; }
     window.open(`tel:${normalizePhone(active.lead_phone)}`);
-    // Não pré-seleciona resultado: o SDR precisa escolher explicitamente.
-    setCallResult('');
-    setCallPanelOpen(true);
-  };
-
-  const doEmail = () => {
-    if (!active?.lead_email) { toast.error('Lead sem e-mail cadastrado'); return; }
-    window.open(`mailto:${active.lead_email}`);
+    setCallResult('atendeu');
   };
 
   const doWhatsApp = async () => {
@@ -159,78 +146,44 @@ export default function Foco() {
     }
     window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(body)}`, '_blank');
     if (profile) {
-      try {
-        await logLeadActivity({
-          leadId: active.lead_id, userId: profile.id,
-          actionType: 'whatsapp_sent', description: 'WhatsApp enviado',
-        });
-      } catch (e) {
-        toast.error('WhatsApp aberto, mas não foi possível registrar a atividade', {
-          description: e instanceof Error ? e.message : undefined,
-        });
-      }
+      await logLeadActivity({
+        leadId: active.lead_id, userId: profile.id,
+        actionType: 'whatsapp_sent', description: 'WhatsApp enviado',
+      });
     }
   };
 
-  const confirmLoss = async (reason: string) => {
+  const doDiscard = async () => {
     if (!active || !profile) return;
-    const item = active;
-    const { error } = await supabase
-      .from('leads')
-      .update({ status: 'perdido', is_suppressed: true, loss_reason: reason })
-      .eq('id', item.lead_id);
-    if (error) {
-      toast.error('Não foi possível descartar o lead', { description: error.message });
-      throw error;
-    }
-    try {
-      await logLeadActivity({
-        leadId: item.lead_id, userId: profile.id,
-        actionType: 'status_change', description: `Lead perdido — ${reason}`,
-        previousStatus: item.lead_status, newStatus: 'perdido',
-      });
-    } catch { /* atividade é secundária ao descarte */ }
-    toast.success('Lead marcado como perdido', { description: reason });
-    setItems(prev => prev.filter(i => i.lead_id !== item.lead_id));
+    if (!confirm('Descartar este lead?')) return;
+    await supabase.from('leads').update({ status: 'perdido', is_suppressed: true } as never).eq('id', active.lead_id);
+    await logLeadActivity({
+      leadId: active.lead_id, userId: profile.id,
+      actionType: 'status_change', description: 'Lead descartado pela fila',
+      newStatus: 'perdido',
+    });
+    toast.success('Lead descartado');
+    setItems(prev => prev.filter(i => i.item_key !== active.item_key));
     advance();
   };
 
-  const setFollowUpIn = (days: number) => {
-    const d = new Date();
-    d.setDate(d.getDate() + days);
-    d.setHours(9, 0, 0, 0);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    setNextDate(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
-  };
-
   const submitCallResult = async () => {
-    if (!active || !profile) return;
-    if (!callResult) { toast.error('Escolha o resultado da ligação'); return; }
+    if (!active || !profile || !callResult) return;
     const map = { atendeu: 'Ligação atendida', nao_atendeu: 'Ligação sem resposta', caixa: 'Caiu na caixa postal' };
-    setSavingCall(true);
-    try {
-      await logLeadActivity({
-        leadId: active.lead_id, userId: profile.id,
-        actionType: 'call_made', description: map[callResult],
-      });
-      if (nextDate) {
-        const { error } = await supabase.from('tasks').insert({
-          assigned_to: profile.id, created_by: profile.id, lead_id: active.lead_id,
-          title: `Follow-up com ${active.lead_name}`,
-          start_time: new Date(nextDate).toISOString(), completed: false,
-        });
-        if (error) throw error;
-      }
-      toast.success('Registro salvo');
-      setCallResult(''); setNextDate(''); setCallPanelOpen(false);
-      void load();
-    } catch (e) {
-      toast.error('Erro ao salvar o registro da ligação', {
-        description: e instanceof Error ? e.message : undefined,
-      });
-    } finally {
-      setSavingCall(false);
+    await logLeadActivity({
+      leadId: active.lead_id, userId: profile.id,
+      actionType: 'call_made', description: map[callResult],
+    });
+    if (nextDate) {
+      await supabase.from('tasks').insert({
+        assigned_to: profile.id, created_by: profile.id, lead_id: active.lead_id,
+        title: `Follow-up com ${active.lead_name}`,
+        start_time: new Date(nextDate).toISOString(), completed: false,
+      } as never);
     }
+    toast.success('Registro salvo');
+    setCallResult(''); setNextDate('');
+    void load();
   };
 
   const submitNote = async () => {
@@ -355,8 +308,7 @@ export default function Foco() {
               <ScrollArea className="flex-1 p-4">
                 <div className="space-y-4">
                   <LeadRichProfile
-                    key={active.lead_id}
-                    cnpj={active.lead_cnpj}
+                    cnpj=""
                     razaoSocial={active.lead_name}
                     nomeFantasia={active.lead_name}
                     municipio={active.lead_city}
@@ -385,7 +337,7 @@ export default function Foco() {
                   <MessageCircle className="h-4 w-4 mr-2 text-green-600" /> WhatsApp <kbd className="ml-auto text-[10px] opacity-60">W</kbd>
                 </Button>
                 <Button
-                  onClick={doEmail}
+                  onClick={() => active.lead_email && window.open(`mailto:${active.lead_email}`)}
                   variant="outline" className="w-full justify-start" size="sm" disabled={!active.lead_email}>
                   <Mail className="h-4 w-4 mr-2" /> E-mail <kbd className="ml-auto text-[10px] opacity-60">E</kbd>
                 </Button>
@@ -397,7 +349,7 @@ export default function Foco() {
                 </Button>
               </Card>
 
-              {callPanelOpen && (
+              {callResult && (
                 <Card className="p-3 space-y-2">
                   <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Resultado da ligação</div>
                   <div className="grid grid-cols-3 gap-1">
@@ -410,20 +362,9 @@ export default function Foco() {
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">Próximo contato</label>
-                    <div className="flex gap-1 mb-1">
-                      <Button type="button" size="sm" variant="outline" className="h-7 text-[11px] flex-1"
-                        onClick={() => setFollowUpIn(1)}>Amanhã</Button>
-                      <Button type="button" size="sm" variant="outline" className="h-7 text-[11px] flex-1"
-                        onClick={() => setFollowUpIn(3)}>Em 3 dias</Button>
-                    </div>
                     <Input type="datetime-local" value={nextDate} onChange={e => setNextDate(e.target.value)} className="h-8 text-xs" />
                   </div>
-                  <Button size="sm" className="w-full" onClick={() => void submitCallResult()} disabled={!callResult || savingCall}>
-                    {savingCall ? 'Salvando...' : 'Salvar'}
-                  </Button>
-                  {!callResult && (
-                    <p className="text-[10px] text-muted-foreground">Escolha o resultado para poder salvar.</p>
-                  )}
+                  <Button size="sm" className="w-full" onClick={submitCallResult}>Salvar</Button>
                 </Card>
               )}
 
@@ -439,7 +380,7 @@ export default function Foco() {
                 <Button onClick={advance} variant="secondary" className="w-full" size="sm">
                   <ArrowRight className="h-4 w-4 mr-2" /> Próximo <kbd className="ml-auto text-[10px] opacity-60">→</kbd>
                 </Button>
-                <Button onClick={() => setLossOpen(true)} variant="ghost" className="w-full text-destructive hover:text-destructive" size="sm">
+                <Button onClick={() => void doDiscard()} variant="ghost" className="w-full text-destructive hover:text-destructive" size="sm">
                   <X className="h-4 w-4 mr-2" /> Descartar <kbd className="ml-auto text-[10px] opacity-60">D</kbd>
                 </Button>
               </Card>
@@ -463,13 +404,6 @@ export default function Foco() {
           onMeetingCreated={() => { setMeetingOpen(false); void load(); }}
         />
       )}
-
-      <LossReasonDialog
-        open={lossOpen}
-        onOpenChange={setLossOpen}
-        leadName={active?.lead_name}
-        onConfirm={confirmLoss}
-      />
     </DashboardLayout>
   );
 }
