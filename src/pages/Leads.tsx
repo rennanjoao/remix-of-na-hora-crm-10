@@ -106,6 +106,10 @@ export default function Leads() {
   const [filters, setFilters] = useState(emptyFilters);
   const [appliedFilters, setAppliedFilters] = useState(emptyFilters);
   const [showFilters, setShowFilters] = useState(false);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [totalCount, setTotalCount] = useState<number | null>(null);
+  const [lossTarget, setLossTarget] = useState<LeadExt | null>(null);
   const activeFilterCount = Object.values(appliedFilters).filter(v => v && String(v).trim() !== '').length;
 
   // Edit form state
