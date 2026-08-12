@@ -255,7 +255,7 @@ export default function Reunioes() {
                   return (
                     <TableRow key={meeting.id}>
                       <TableCell className="font-medium">{meeting.title}</TableCell>
-                      <TableCell>{lead?.nome_fantasia || lead?.razao_social || '-'}</TableCell>
+                      <TableCell>{lead?.nome_fantasia || lead?.razao_social || (meeting.lead_id ? '-' : <span className="text-muted-foreground italic">Reunião avulsa</span>)}</TableCell>
                       <TableCell>
                         {format(new Date(meeting.meeting_date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                       </TableCell>
