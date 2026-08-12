@@ -462,6 +462,13 @@ export default function Foco() {
           onMeetingCreated={() => { setMeetingOpen(false); void load(); }}
         />
       )}
+
+      <LossReasonDialog
+        open={lossOpen}
+        onOpenChange={setLossOpen}
+        leadName={active?.lead_name}
+        onConfirm={confirmLoss}
+      />
     </DashboardLayout>
   );
 }
