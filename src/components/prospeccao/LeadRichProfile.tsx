@@ -1,10 +1,10 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Phone, Star, MapPin, ExternalLink, Loader2, ImageOff, Globe } from 'lucide-react';
+import { Phone, Star, MapPin, ExternalLink, Loader2, ImageOff, Globe, SearchX, AlertTriangle } from 'lucide-react';
 import { usePlacesEnrichment } from '@/hooks/usePlacesEnrichment';
 
 interface Props {
-  cnpj: string;
+  cnpj?: string | null;
   razaoSocial?: string | null;
   nomeFantasia?: string | null;
   municipio?: string | null;
@@ -13,9 +13,18 @@ interface Props {
 }
 
 export function LeadRichProfile(props: Props) {
-  const { loading, data, error } = usePlacesEnrichment(props);
+  const { data, error, status } = usePlacesEnrichment(props);
 
-  if (loading && !data) {
+  if (status === 'idle') {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+        <SearchX className="h-3.5 w-3.5" />
+        Dados insuficientes para buscar o perfil público (é preciso CNPJ ou nome da empresa).
+      </div>
+    );
+  }
+
+  if (status === 'loading') {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground py-3">
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -24,11 +33,16 @@ export function LeadRichProfile(props: Props) {
     );
   }
 
-  if (error) {
-    return <div className="text-xs text-muted-foreground py-2">Sem dados enriquecidos disponíveis.</div>;
+  if (status === 'error') {
+    return (
+      <div className="flex items-center gap-2 text-xs text-destructive py-2">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        Falha ao consultar o Google Places{error ? `: ${error}` : ''}.
+      </div>
+    );
   }
 
-  if (!data || !data.found) {
+  if (status === 'not_found' || !data?.found) {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
         <ImageOff className="h-3.5 w-3.5" />
