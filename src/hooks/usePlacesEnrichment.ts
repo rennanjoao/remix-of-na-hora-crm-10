@@ -82,7 +82,7 @@ export function usePlacesEnrichment(args: Args) {
       if (err) throw err;
       const enrichment = res as PlacesEnrichment;
       cache.set(key, enrichment);
-      return enrichment;
+      return enrichment; 
     })();
     inflight.set(key, promise);
 
