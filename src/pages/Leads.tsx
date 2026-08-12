@@ -756,6 +756,13 @@ export default function Leads() {
           lead={selectedLead}
           onMeetingCreated={() => { if (selectedLead) fetchTimeline(selectedLead.id); }}
         />
+
+        <LossReasonDialog
+          open={!!lossTarget}
+          onOpenChange={(v) => { if (!v) setLossTarget(null); }}
+          leadName={lossTarget?.nome_fantasia || lossTarget?.razao_social}
+          onConfirm={confirmLoss}
+        />
       </div>
     </DashboardLayout>
   );
