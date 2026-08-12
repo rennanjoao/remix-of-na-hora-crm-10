@@ -16,9 +16,10 @@ import { toast } from 'sonner';
 import { logLeadActivity } from '@/lib/lead-activities';
 import { LeadActivityTimeline } from '@/components/leads/LeadActivityTimeline';
 import { ImportLeadsCsvDialog } from '@/components/leads/ImportLeadsCsvDialog';
+import { LossReasonDialog } from '@/components/leads/LossReasonDialog';
 import {
   Loader2, Download, MoreVertical, Trash2, RotateCcw, Save, MessageSquare, Phone, Mail,
-  Building2, MapPin, Video, Plus, Trash, Filter, X, Activity,
+  Building2, MapPin, Video, Plus, Trash, Filter, X, Activity, Search,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
