@@ -38,7 +38,7 @@ interface Meeting {
   jitsi_link: string | null;
   contact_name: string | null;
   sdr_id: string;
-  lead_id: string;
+  lead_id: string | null;
 }
 
 interface Profile {
