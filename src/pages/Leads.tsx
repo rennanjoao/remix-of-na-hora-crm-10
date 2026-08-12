@@ -16,10 +16,9 @@ import { toast } from 'sonner';
 import { logLeadActivity } from '@/lib/lead-activities';
 import { LeadActivityTimeline } from '@/components/leads/LeadActivityTimeline';
 import { ImportLeadsCsvDialog } from '@/components/leads/ImportLeadsCsvDialog';
-import { LossReasonDialog } from '@/components/leads/LossReasonDialog';
 import {
   Loader2, Download, MoreVertical, Trash2, RotateCcw, Save, MessageSquare, Phone, Mail,
-  Building2, MapPin, Video, Plus, Trash, Filter, X, Activity, Search,
+  Building2, MapPin, Video, Plus, Trash, Filter, X, Activity,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -107,10 +106,6 @@ export default function Leads() {
   const [filters, setFilters] = useState(emptyFilters);
   const [appliedFilters, setAppliedFilters] = useState(emptyFilters);
   const [showFilters, setShowFilters] = useState(false);
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [totalCount, setTotalCount] = useState<number | null>(null);
-  const [lossTarget, setLossTarget] = useState<LeadExt | null>(null);
   const activeFilterCount = Object.values(appliedFilters).filter(v => v && String(v).trim() !== '').length;
 
   // Edit form state
@@ -121,18 +116,12 @@ export default function Leads() {
 
   const activeStatuses: LeadStatus[] = COLUMNS.map(c => c.id);
 
-  const fetchLeadsPage = async (
-    which: 'pipeline' | 'descartados',
-    page: number,
-    append: boolean,
-    f = appliedFilters,
-    term = debouncedSearch,
-  ) => {
+  const fetchLeadsPage = async (which: 'pipeline' | 'descartados', page: number, append: boolean, f = appliedFilters) => {
     append ? setLoadingMore(true) : setLoading(true);
     try {
       const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
-      let query = supabase.from('leads').select(LEAD_COLS, { count: 'exact' }).order('updated_at', { ascending: false }).range(from, to);
+      let query = supabase.from('leads').select(LEAD_COLS).order('updated_at', { ascending: false }).range(from, to);
       query = which === 'descartados'
         ? query.eq('status', 'perdido')
         : query.in('status', activeStatuses);
@@ -142,25 +131,8 @@ export default function Leads() {
       if (f.setor.trim()) query = query.ilike('setor', `%${f.setor.trim()}%`);
       if (f.dateFrom) query = query.gte('created_at', f.dateFrom);
       if (f.dateTo) query = query.lte('created_at', `${f.dateTo}T23:59:59`);
-      const t = term.trim();
-      if (t) {
-        const digits = t.replace(/\D/g, '');
-        const like = `%${t.replace(/[%,()]/g, ' ')}%`;
-        const conds = [
-          `razao_social.ilike.${like}`,
-          `nome_fantasia.ilike.${like}`,
-          `cidade.ilike.${like}`,
-          `nome_decisor.ilike.${like}`,
-        ];
-        if (digits.length >= 3) {
-          conds.push(`cnpj.ilike.%${digits}%`, `telefone.ilike.%${digits}%`);
-        }
-        query = query.or(conds.join(','));
-      }
-      const { data, error, count } = await query;
+      const { data, error } = await query;
       if (error) throw error;
-      setTotalCount(count ?? null);
-
       const rows = (data as unknown as LeadExt[]) || [];
       setLeads(prev => {
         if (!append) return rows;
@@ -203,15 +175,10 @@ export default function Leads() {
   };
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 350);
-    return () => clearTimeout(t);
-  }, [search]);
-
-  useEffect(() => {
     setPipelinePage(0); setDiscardedPage(0);
-    fetchLeadsPage(tab, 0, false, appliedFilters, debouncedSearch);
+    fetchLeadsPage(tab, 0, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, debouncedSearch]);
+  }, [tab]);
 
   const loadMore = () => {
     const nextPage = (tab === 'pipeline' ? pipelinePage : discardedPage) + 1;
@@ -251,40 +218,6 @@ export default function Leads() {
       console.error('Error updating status:', e);
       toast.error('Erro ao atualizar status', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
     }
-  };
-
-  /** Ponto único de mudança de status: perdas exigem motivo. */
-  const requestStatusChange = (leadId: string, newStatus: LeadStatus) => {
-    if (newStatus === 'perdido') {
-      const lead = leads.find(l => l.id === leadId);
-      if (lead) { setLossTarget(lead); return; }
-    }
-    void updateStatus(leadId, newStatus);
-  };
-
-  const confirmLoss = async (reason: string) => {
-    if (!lossTarget) return;
-    const id = lossTarget.id;
-    const { error } = await supabase
-      .from('leads')
-      .update({ status: 'perdido', is_suppressed: true, loss_reason: reason })
-      .eq('id', id);
-    if (error) {
-      toast.error('Erro ao descartar lead', { description: error.message });
-      throw error;
-    }
-    setLeads(p => p.map(l => l.id === id ? { ...l, status: 'perdido', loss_reason: reason } as LeadExt : l));
-    if (profile) {
-      try {
-        await logLeadActivity({
-          leadId: id, userId: profile.id, actionType: 'status_change',
-          description: `Lead perdido — ${reason}`,
-          previousStatus: lossTarget.status ?? null, newStatus: 'perdido',
-        });
-      } catch { /* atividade é secundária */ }
-    }
-    toast.success('Lead marcado como perdido', { description: reason });
-    setLossTarget(null);
   };
 
   const restoreLead = (id: string) => updateStatus(id, 'novo', { loss_reason: null });
@@ -399,7 +332,7 @@ export default function Leads() {
     setDraggingId(null); setHoverColumn(null);
     if (!id) return;
     const lead = leads.find(l => l.id === id);
-    if (lead && lead.status !== col) requestStatusChange(id, col);
+    if (lead && lead.status !== col) updateStatus(id, col);
   };
 
   const exportAll = () => downloadCSV(`leads_export_${Date.now()}.csv`, toCSV(activeLeads));
@@ -419,10 +352,7 @@ export default function Leads() {
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="font-display text-3xl font-bold">Pipeline de Leads</h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Arraste os cards para mover entre estágios
-              {totalCount != null && ` • mostrando ${tab === 'pipeline' ? activeLeads.length : discardedLeads.length} de ${totalCount}`}
-            </p>
+            <p className="text-muted-foreground mt-1 text-sm">Arraste os cards para mover entre estágios</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setShowFilters(v => !v)} className="gap-2">
@@ -437,29 +367,6 @@ export default function Leads() {
             </Button>
           </div>
         </div>
-
-        <div className="relative max-w-xl">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por empresa, CNPJ, telefone, cidade ou decisor..."
-            className="pl-9 pr-9"
-            aria-label="Buscar leads"
-          />
-          {search && (
-            <button
-              type="button"
-              onClick={() => setSearch('')}
-              aria-label="Limpar busca"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-
-
 
         {showFilters && (
           <Card className="sticky top-14 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -597,7 +504,7 @@ export default function Leads() {
                             </div>
                             <Select
                               value={lead.status}
-                              onValueChange={(v: LeadStatus) => requestStatusChange(lead.id, v)}
+                              onValueChange={(v: LeadStatus) => updateStatus(lead.id, v)}
                             >
                               <SelectTrigger className="h-7 text-xs" onClick={(e) => e.stopPropagation()}>
                                 <SelectValue />
@@ -755,13 +662,6 @@ export default function Leads() {
           onOpenChange={setMeetingModalOpen}
           lead={selectedLead}
           onMeetingCreated={() => { if (selectedLead) fetchTimeline(selectedLead.id); }}
-        />
-
-        <LossReasonDialog
-          open={!!lossTarget}
-          onOpenChange={(v) => { if (!v) setLossTarget(null); }}
-          leadName={lossTarget?.nome_fantasia || lossTarget?.razao_social}
-          onConfirm={confirmLoss}
         />
       </div>
     </DashboardLayout>
