@@ -815,7 +815,7 @@ export type Database = {
           duration_minutes: number
           id: string
           jitsi_link: string | null
-          lead_id: string
+          lead_id: string | null
           meeting_date: string
           meeting_link: string | null
           meeting_type: string
@@ -832,7 +832,7 @@ export type Database = {
           duration_minutes?: number
           id?: string
           jitsi_link?: string | null
-          lead_id: string
+          lead_id?: string | null
           meeting_date: string
           meeting_link?: string | null
           meeting_type?: string
@@ -849,7 +849,7 @@ export type Database = {
           duration_minutes?: number
           id?: string
           jitsi_link?: string | null
-          lead_id?: string
+          lead_id?: string | null
           meeting_date?: string
           meeting_link?: string | null
           meeting_type?: string
@@ -1253,6 +1253,7 @@ export type Database = {
           extra: Json
           item_key: string
           lead_city: string
+          lead_cnpj: string
           lead_email: string
           lead_id: string
           lead_name: string
