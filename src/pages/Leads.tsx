@@ -202,10 +202,15 @@ export default function Leads() {
   };
 
   useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
     setPipelinePage(0); setDiscardedPage(0);
-    fetchLeadsPage(tab, 0, false);
+    fetchLeadsPage(tab, 0, false, appliedFilters, debouncedSearch);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
+  }, [tab, debouncedSearch]);
 
   const loadMore = () => {
     const nextPage = (tab === 'pipeline' ? pipelinePage : discardedPage) + 1;
