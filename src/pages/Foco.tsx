@@ -61,6 +61,9 @@ export default function Foco() {
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [callResult, setCallResult] = useState<'atendeu' | 'nao_atendeu' | 'caixa' | ''>('');
+  const [callPanelOpen, setCallPanelOpen] = useState(false);
+  const [savingCall, setSavingCall] = useState(false);
+  const [lossOpen, setLossOpen] = useState(false);
   const [nextDate, setNextDate] = useState('');
   const [meetingOpen, setMeetingOpen] = useState(false);
   const [pullingLead, setPullingLead] = useState(false);
