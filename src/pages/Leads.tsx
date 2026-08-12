@@ -398,7 +398,7 @@ export default function Leads() {
     setDraggingId(null); setHoverColumn(null);
     if (!id) return;
     const lead = leads.find(l => l.id === id);
-    if (lead && lead.status !== col) updateStatus(id, col);
+    if (lead && lead.status !== col) requestStatusChange(id, col);
   };
 
   const exportAll = () => downloadCSV(`leads_export_${Date.now()}.csv`, toCSV(activeLeads));
@@ -418,7 +418,10 @@ export default function Leads() {
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="font-display text-3xl font-bold">Pipeline de Leads</h1>
-            <p className="text-muted-foreground mt-1 text-sm">Arraste os cards para mover entre estágios</p>
+            <p className="text-muted-foreground mt-1 text-sm">
+              Arraste os cards para mover entre estágios
+              {totalCount != null && ` • mostrando ${tab === 'pipeline' ? activeLeads.length : discardedLeads.length} de ${totalCount}`}
+            </p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setShowFilters(v => !v)} className="gap-2">
@@ -570,7 +573,7 @@ export default function Leads() {
                             </div>
                             <Select
                               value={lead.status}
-                              onValueChange={(v: LeadStatus) => updateStatus(lead.id, v)}
+                              onValueChange={(v: LeadStatus) => requestStatusChange(lead.id, v)}
                             >
                               <SelectTrigger className="h-7 text-xs" onClick={(e) => e.stopPropagation()}>
                                 <SelectValue />
