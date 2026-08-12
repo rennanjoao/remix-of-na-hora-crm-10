@@ -99,7 +99,7 @@ export default function Foco() {
     const idx = items.findIndex(i => i.item_key === activeKey);
     const next = items[(idx + 1) % items.length];
     setActiveKey(next?.item_key ?? null);
-    setNoteOpen(false); setCallResult(''); setNextDate(''); setNoteText('');
+    setNoteOpen(false); setCallResult(''); setCallPanelOpen(false); setNextDate(''); setNoteText('');
   }, [items, activeKey]);
 
   const navigate = useCallback((dir: 1 | -1) => {
@@ -119,9 +119,10 @@ export default function Foco() {
       else if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); navigate(-1); }
       else if (e.key === 'c') { e.preventDefault(); doCall(); }
       else if (e.key === 'w') { e.preventDefault(); void doWhatsApp(); }
+      else if (e.key === 'e') { e.preventDefault(); doEmail(); }
       else if (e.key === 'm') { e.preventDefault(); setMeetingOpen(true); }
       else if (e.key === 'n') { e.preventDefault(); setNoteOpen(true); }
-      else if (e.key === 'd') { e.preventDefault(); void doDiscard(); }
+      else if (e.key === 'd') { e.preventDefault(); setLossOpen(true); }
       else if (e.key === 'ArrowRight') { e.preventDefault(); advance(); }
     };
     window.addEventListener('keydown', handler);
