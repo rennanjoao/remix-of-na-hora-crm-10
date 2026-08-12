@@ -28,6 +28,7 @@ interface QueueItem {
   priority: number;
   lead_id: string;
   lead_name: string;
+  lead_cnpj: string | null;
   lead_city: string | null;
   lead_state: string | null;
   lead_phone: string | null;
@@ -308,7 +309,8 @@ export default function Foco() {
               <ScrollArea className="flex-1 p-4">
                 <div className="space-y-4">
                   <LeadRichProfile
-                    cnpj=""
+                    key={active.lead_id}
+                    cnpj={active.lead_cnpj}
                     razaoSocial={active.lead_name}
                     nomeFantasia={active.lead_name}
                     municipio={active.lead_city}
