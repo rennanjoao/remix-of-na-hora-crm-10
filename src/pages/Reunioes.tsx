@@ -23,7 +23,7 @@ interface MeetingRow {
   jitsi_link: string;
   contact_name: string | null;
   sdr_id: string;
-  lead_id: string;
+  lead_id: string | null;
   meeting_type: string;
   status: string;
   created_at: string;
@@ -57,7 +57,7 @@ export default function Reunioes() {
       setMeetings(meetingsRows);
 
       // Só puxa leads e SDRs realmente referenciados — evita carregar tabelas inteiras.
-      const leadIds = [...new Set(meetingsRows.map(m => m.lead_id).filter(Boolean))];
+      const leadIds = [...new Set(meetingsRows.map(m => m.lead_id).filter((id): id is string => !!id))];
       const sdrIds = [...new Set(meetingsRows.map(m => m.sdr_id).filter(Boolean))];
 
       const [leadsRes, profilesRes] = await Promise.all([
@@ -99,7 +99,7 @@ export default function Reunioes() {
         jitsi_link: jitsiLink,
         sdr_id: profile.id,
         created_by: profile.id,
-        lead_id: profile.id, // fallback: reunião sem lead vinculado
+        lead_id: null, // reunião avulsa: sem lead vinculado
         meeting_type: 'instant',
         status: 'em_andamento',
       });
@@ -251,11 +251,11 @@ export default function Reunioes() {
               </TableHeader>
               <TableBody>
                 {filteredMeetings.map((meeting) => {
-                  const lead = leadMap[meeting.lead_id];
+                  const lead = meeting.lead_id ? leadMap[meeting.lead_id] : undefined;
                   return (
                     <TableRow key={meeting.id}>
                       <TableCell className="font-medium">{meeting.title}</TableCell>
-                      <TableCell>{lead?.nome_fantasia || lead?.razao_social || '-'}</TableCell>
+                      <TableCell>{lead?.nome_fantasia || lead?.razao_social || (meeting.lead_id ? '-' : <span className="text-muted-foreground italic">Reunião avulsa</span>)}</TableCell>
                       <TableCell>
                         {format(new Date(meeting.meeting_date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                       </TableCell>

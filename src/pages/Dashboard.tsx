@@ -108,7 +108,7 @@ export default function Dashboard() {
         if (error) throw error;
 
         if (data && data.length > 0) {
-          const leadIds = [...new Set(data.map(m => m.lead_id))];
+          const leadIds = [...new Set(data.map(m => m.lead_id).filter((id): id is string => !!id))];
           const { data: leads } = await supabase
             .from('leads')
             .select('id, razao_social, nome_fantasia')
@@ -118,7 +118,7 @@ export default function Dashboard() {
 
           setUpcomingMeetings(data.map(m => ({
             ...m,
-            lead_name: leadMap.get(m.lead_id) || 'Empresa',
+            lead_name: (m.lead_id ? leadMap.get(m.lead_id) : null) || 'Sem lead',
           })));
         }
       } catch (e) {
