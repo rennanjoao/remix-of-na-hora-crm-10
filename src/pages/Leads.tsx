@@ -116,12 +116,18 @@ export default function Leads() {
 
   const activeStatuses: LeadStatus[] = COLUMNS.map(c => c.id);
 
-  const fetchLeadsPage = async (which: 'pipeline' | 'descartados', page: number, append: boolean, f = appliedFilters) => {
+  const fetchLeadsPage = async (
+    which: 'pipeline' | 'descartados',
+    page: number,
+    append: boolean,
+    f = appliedFilters,
+    term = debouncedSearch,
+  ) => {
     append ? setLoadingMore(true) : setLoading(true);
     try {
       const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
-      let query = supabase.from('leads').select(LEAD_COLS).order('updated_at', { ascending: false }).range(from, to);
+      let query = supabase.from('leads').select(LEAD_COLS, { count: 'exact' }).order('updated_at', { ascending: false }).range(from, to);
       query = which === 'descartados'
         ? query.eq('status', 'perdido')
         : query.in('status', activeStatuses);
@@ -131,8 +137,25 @@ export default function Leads() {
       if (f.setor.trim()) query = query.ilike('setor', `%${f.setor.trim()}%`);
       if (f.dateFrom) query = query.gte('created_at', f.dateFrom);
       if (f.dateTo) query = query.lte('created_at', `${f.dateTo}T23:59:59`);
-      const { data, error } = await query;
+      const t = term.trim();
+      if (t) {
+        const digits = t.replace(/\D/g, '');
+        const like = `%${t.replace(/[%,()]/g, ' ')}%`;
+        const conds = [
+          `razao_social.ilike.${like}`,
+          `nome_fantasia.ilike.${like}`,
+          `cidade.ilike.${like}`,
+          `nome_decisor.ilike.${like}`,
+        ];
+        if (digits.length >= 3) {
+          conds.push(`cnpj.ilike.%${digits}%`, `telefone.ilike.%${digits}%`);
+        }
+        query = query.or(conds.join(','));
+      }
+      const { data, error, count } = await query;
       if (error) throw error;
+      setTotalCount(count ?? null);
+
       const rows = (data as unknown as LeadExt[]) || [];
       setLeads(prev => {
         if (!append) return rows;
