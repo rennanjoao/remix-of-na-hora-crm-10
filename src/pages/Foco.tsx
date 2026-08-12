@@ -384,7 +384,7 @@ export default function Foco() {
                   <MessageCircle className="h-4 w-4 mr-2 text-green-600" /> WhatsApp <kbd className="ml-auto text-[10px] opacity-60">W</kbd>
                 </Button>
                 <Button
-                  onClick={() => active.lead_email && window.open(`mailto:${active.lead_email}`)}
+                  onClick={doEmail}
                   variant="outline" className="w-full justify-start" size="sm" disabled={!active.lead_email}>
                   <Mail className="h-4 w-4 mr-2" /> E-mail <kbd className="ml-auto text-[10px] opacity-60">E</kbd>
                 </Button>
@@ -396,7 +396,7 @@ export default function Foco() {
                 </Button>
               </Card>
 
-              {callResult && (
+              {callPanelOpen && (
                 <Card className="p-3 space-y-2">
                   <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Resultado da ligação</div>
                   <div className="grid grid-cols-3 gap-1">
@@ -409,9 +409,20 @@ export default function Foco() {
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">Próximo contato</label>
+                    <div className="flex gap-1 mb-1">
+                      <Button type="button" size="sm" variant="outline" className="h-7 text-[11px] flex-1"
+                        onClick={() => setFollowUpIn(1)}>Amanhã</Button>
+                      <Button type="button" size="sm" variant="outline" className="h-7 text-[11px] flex-1"
+                        onClick={() => setFollowUpIn(3)}>Em 3 dias</Button>
+                    </div>
                     <Input type="datetime-local" value={nextDate} onChange={e => setNextDate(e.target.value)} className="h-8 text-xs" />
                   </div>
-                  <Button size="sm" className="w-full" onClick={submitCallResult}>Salvar</Button>
+                  <Button size="sm" className="w-full" onClick={() => void submitCallResult()} disabled={!callResult || savingCall}>
+                    {savingCall ? 'Salvando...' : 'Salvar'}
+                  </Button>
+                  {!callResult && (
+                    <p className="text-[10px] text-muted-foreground">Escolha o resultado para poder salvar.</p>
+                  )}
                 </Card>
               )}
 
@@ -427,7 +438,7 @@ export default function Foco() {
                 <Button onClick={advance} variant="secondary" className="w-full" size="sm">
                   <ArrowRight className="h-4 w-4 mr-2" /> Próximo <kbd className="ml-auto text-[10px] opacity-60">→</kbd>
                 </Button>
-                <Button onClick={() => void doDiscard()} variant="ghost" className="w-full text-destructive hover:text-destructive" size="sm">
+                <Button onClick={() => setLossOpen(true)} variant="ghost" className="w-full text-destructive hover:text-destructive" size="sm">
                   <X className="h-4 w-4 mr-2" /> Descartar <kbd className="ml-auto text-[10px] opacity-60">D</kbd>
                 </Button>
               </Card>
