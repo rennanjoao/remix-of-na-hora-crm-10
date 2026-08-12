@@ -23,7 +23,7 @@ interface MeetingRow {
   jitsi_link: string;
   contact_name: string | null;
   sdr_id: string;
-  lead_id: string;
+  lead_id: string | null;
   meeting_type: string;
   status: string;
   created_at: string;
@@ -99,7 +99,7 @@ export default function Reunioes() {
         jitsi_link: jitsiLink,
         sdr_id: profile.id,
         created_by: profile.id,
-        lead_id: profile.id, // fallback: reunião sem lead vinculado
+        lead_id: null, // reunião avulsa: sem lead vinculado
         meeting_type: 'instant',
         status: 'em_andamento',
       });
