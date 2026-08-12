@@ -392,7 +392,7 @@ export default function Foco() {
           )}
         </div>
       </div>
-
+ 
       {meetingOpen && active && (
         <ScheduleMeetingModal
           open={meetingOpen}
