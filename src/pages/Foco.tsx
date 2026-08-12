@@ -308,7 +308,7 @@ export default function Foco() {
               <ScrollArea className="flex-1 p-4">
                 <div className="space-y-4">
                   <LeadRichProfile
-                    cnpj=""
+                    cnpj={active.lead_cnpj || ''}
                     razaoSocial={active.lead_name}
                     nomeFantasia={active.lead_name}
                     municipio={active.lead_city}
