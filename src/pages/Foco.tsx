@@ -133,7 +133,14 @@ export default function Foco() {
   const doCall = () => {
     if (!active?.lead_phone) { toast.error('Sem telefone cadastrado'); return; }
     window.open(`tel:${normalizePhone(active.lead_phone)}`);
-    setCallResult('atendeu');
+    // Não pré-seleciona resultado: o SDR precisa escolher explicitamente.
+    setCallResult('');
+    setCallPanelOpen(true);
+  };
+
+  const doEmail = () => {
+    if (!active?.lead_email) { toast.error('Lead sem e-mail cadastrado'); return; }
+    window.open(`mailto:${active.lead_email}`);
   };
 
   const doWhatsApp = async () => {
@@ -151,44 +158,78 @@ export default function Foco() {
     }
     window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(body)}`, '_blank');
     if (profile) {
-      await logLeadActivity({
-        leadId: active.lead_id, userId: profile.id,
-        actionType: 'whatsapp_sent', description: 'WhatsApp enviado',
-      });
+      try {
+        await logLeadActivity({
+          leadId: active.lead_id, userId: profile.id,
+          actionType: 'whatsapp_sent', description: 'WhatsApp enviado',
+        });
+      } catch (e) {
+        toast.error('WhatsApp aberto, mas não foi possível registrar a atividade', {
+          description: e instanceof Error ? e.message : undefined,
+        });
+      }
     }
   };
 
-  const doDiscard = async () => {
+  const confirmLoss = async (reason: string) => {
     if (!active || !profile) return;
-    if (!confirm('Descartar este lead?')) return;
-    await supabase.from('leads').update({ status: 'perdido', is_suppressed: true } as never).eq('id', active.lead_id);
-    await logLeadActivity({
-      leadId: active.lead_id, userId: profile.id,
-      actionType: 'status_change', description: 'Lead descartado pela fila',
-      newStatus: 'perdido',
-    });
-    toast.success('Lead descartado');
-    setItems(prev => prev.filter(i => i.item_key !== active.item_key));
+    const item = active;
+    const { error } = await supabase
+      .from('leads')
+      .update({ status: 'perdido', is_suppressed: true, loss_reason: reason })
+      .eq('id', item.lead_id);
+    if (error) {
+      toast.error('Não foi possível descartar o lead', { description: error.message });
+      throw error;
+    }
+    try {
+      await logLeadActivity({
+        leadId: item.lead_id, userId: profile.id,
+        actionType: 'status_change', description: `Lead perdido — ${reason}`,
+        previousStatus: item.lead_status, newStatus: 'perdido',
+      });
+    } catch { /* atividade é secundária ao descarte */ }
+    toast.success('Lead marcado como perdido', { description: reason });
+    setItems(prev => prev.filter(i => i.lead_id !== item.lead_id));
     advance();
   };
 
+  const setFollowUpIn = (days: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    d.setHours(9, 0, 0, 0);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    setNextDate(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
+  };
+
   const submitCallResult = async () => {
-    if (!active || !profile || !callResult) return;
+    if (!active || !profile) return;
+    if (!callResult) { toast.error('Escolha o resultado da ligação'); return; }
     const map = { atendeu: 'Ligação atendida', nao_atendeu: 'Ligação sem resposta', caixa: 'Caiu na caixa postal' };
-    await logLeadActivity({
-      leadId: active.lead_id, userId: profile.id,
-      actionType: 'call_made', description: map[callResult],
-    });
-    if (nextDate) {
-      await supabase.from('tasks').insert({
-        assigned_to: profile.id, created_by: profile.id, lead_id: active.lead_id,
-        title: `Follow-up com ${active.lead_name}`,
-        start_time: new Date(nextDate).toISOString(), completed: false,
-      } as never);
+    setSavingCall(true);
+    try {
+      await logLeadActivity({
+        leadId: active.lead_id, userId: profile.id,
+        actionType: 'call_made', description: map[callResult],
+      });
+      if (nextDate) {
+        const { error } = await supabase.from('tasks').insert({
+          assigned_to: profile.id, created_by: profile.id, lead_id: active.lead_id,
+          title: `Follow-up com ${active.lead_name}`,
+          start_time: new Date(nextDate).toISOString(), completed: false,
+        });
+        if (error) throw error;
+      }
+      toast.success('Registro salvo');
+      setCallResult(''); setNextDate(''); setCallPanelOpen(false);
+      void load();
+    } catch (e) {
+      toast.error('Erro ao salvar o registro da ligação', {
+        description: e instanceof Error ? e.message : undefined,
+      });
+    } finally {
+      setSavingCall(false);
     }
-    toast.success('Registro salvo');
-    setCallResult(''); setNextDate('');
-    void load();
   };
 
   const submitNote = async () => {
