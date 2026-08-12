@@ -252,6 +252,40 @@ export default function Leads() {
     }
   };
 
+  /** Ponto único de mudança de status: perdas exigem motivo. */
+  const requestStatusChange = (leadId: string, newStatus: LeadStatus) => {
+    if (newStatus === 'perdido') {
+      const lead = leads.find(l => l.id === leadId);
+      if (lead) { setLossTarget(lead); return; }
+    }
+    void updateStatus(leadId, newStatus);
+  };
+
+  const confirmLoss = async (reason: string) => {
+    if (!lossTarget) return;
+    const id = lossTarget.id;
+    const { error } = await supabase
+      .from('leads')
+      .update({ status: 'perdido', is_suppressed: true, loss_reason: reason })
+      .eq('id', id);
+    if (error) {
+      toast.error('Erro ao descartar lead', { description: error.message });
+      throw error;
+    }
+    setLeads(p => p.map(l => l.id === id ? { ...l, status: 'perdido', loss_reason: reason } as LeadExt : l));
+    if (profile) {
+      try {
+        await logLeadActivity({
+          leadId: id, userId: profile.id, actionType: 'status_change',
+          description: `Lead perdido — ${reason}`,
+          previousStatus: lossTarget.status ?? null, newStatus: 'perdido',
+        });
+      } catch { /* atividade é secundária */ }
+    }
+    toast.success('Lead marcado como perdido', { description: reason });
+    setLossTarget(null);
+  };
+
   const restoreLead = (id: string) => updateStatus(id, 'novo', { loss_reason: null });
 
   const openDetails = (lead: LeadExt) => {
