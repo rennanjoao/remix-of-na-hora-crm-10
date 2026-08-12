@@ -17,6 +17,7 @@ import {
 import { LeadActivityTimeline } from '@/components/leads/LeadActivityTimeline';
 import { LeadRichProfile } from '@/components/prospeccao/LeadRichProfile';
 import { ScheduleMeetingModal } from '@/components/ScheduleMeetingModal';
+import { LossReasonDialog } from '@/components/leads/LossReasonDialog';
 import { logLeadActivity } from '@/lib/lead-activities';
 import { getDefaultScript, interpolateScript } from '@/lib/approach-scripts';
 import { cn } from '@/lib/utils';
