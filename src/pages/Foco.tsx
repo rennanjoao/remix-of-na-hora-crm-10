@@ -28,6 +28,7 @@ interface QueueItem {
   priority: number;
   lead_id: string;
   lead_name: string;
+  lead_cnpj: string | null;
   lead_city: string | null;
   lead_state: string | null;
   lead_phone: string | null;
