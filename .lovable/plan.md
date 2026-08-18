@@ -1,74 +1,83 @@
-# Plano — Prospecção & Leads cirúrgicos
+# Auditoria + plano de evolução — CRM Na Hora Transporte
 
-Antes de tocar em código, confirmo o mapeamento do que **já existe** no projeto (verifiquei nesta análise, para você não pagar por reimplementação):
+## 1. Auditoria (estado atual)
 
-**Já existe — NÃO recriar:**
-- `cnpj-enrich` (edge) + `useBrasilAPI` (hook) — enriquecimento CNPJ.
-- `ScriptsManager` — gestor de scripts.
-- `verify-email-mx` + `verify-email-domain` — verificação de domínio/MX.
-- `email_domains` table + `EmailDomainManager`.
-- Supressão manual: coluna `leads.is_suppressed`, `suppressed_emails`, `handle-unsubscribe`.
-- Dashboard com funil Recharts (`Dashboard.tsx`).
-- Componente `command.tsx` do shadcn (instalado, disponível para Cmd+K).
-- Deduplicação na importação (CNPJ/telefone/place_id).
-- Exportação CSV em `Leads.tsx` (`toCSV`/`downloadCSV`).
-- `Prospeccao.tsx` já usa React.lazy nas rotas (via `App.tsx`) — verificar.
+Base auditada: 13 páginas, ~30 componentes, 15 edge functions, 20 tabelas, 11 funções de banco, 81 leads / 93 atividades em produção.
 
-**Não existe hoje — vai ser criado:**
-- Limite diário por domínio remetente.
-- Auto-enriquecimento CNPJ ao importar do Places.
-- Bounce → supressão automática.
-- Score ICP no card do Places.
-- Buscas salvas.
-- Import CSV.
-- Cmd+K global, atalhos no detalhe, modo compacto, filtros sticky.
-- Merge de duplicatas em Admin.
-- Métricas de bounce/resposta/MX no Dashboard.
+### Já funcionando (preservar)
+- Auth + RBAC (`user_roles`, `has_role`, `get_profile_id`), rotas protegidas fail-closed.
+- Fila "Foco" (`sdr_work_queue`), Kanban de leads, timeline de atividades, reuniões/calendário.
+- Prospecção: Google Places, CNPJ (BrasilAPI + fallback ReceitaWS com cache 30d), scraping de e-mail, score ICP, buscas salvas, import CSV.
+- E-mail: domínio Resend, fluxos em blocos, processador via pg_cron, tracking, bounce/supressão, inbox.
+- TypeScript strict ligado, zero `any`, CORS restrito, JWT validado nas edge functions.
 
----
+### Problemas encontrados
+| # | Severidade | Problema |
+|---|---|---|
+| 1 | Crítico | Não existe fila de jobs. Enriquecimento (CNPJ/Places) roda no navegador, 1 lead por vez. 200 leads/dia é inviável. |
+| 2 | Crítico | Sem retry/backoff nem circuit breaker para APIs externas: falha da BrasilAPI/Google derruba a importação em vez de deixar o lead `pendente`. |
+| 3 | Crítico | Modelo achatado: tudo é `leads`. Sem empresa, sem múltiplos contatos, sem oportunidade, sem valor — impossível responder pipeline financeiro. |
+| 4 | Alto | "Próxima ação" só existe como `leads.next_contact_date` (data, sem hora/tipo/responsável). Leads ativos ficam sem próximo passo. |
+| 5 | Alto | Índices ausentes em `tasks` (só PK), `meetings.lead_id`/`meeting_date`, `leads(assigned_to,status)`, `leads.email`. `sdr_work_queue` faz 6 UNIONs sem suporte de índice. |
+| 6 | Alto | Kanban com paginação global de 50 — leads antigos somem de colunas avançadas; busca ainda parcialmente client-side. |
+| 7 | Alto | `email_sends` sem chave de idempotência (lead+flow+step): reprocessamento pode duplicar envio. |
+| 8 | Médio | Provider de e-mail acoplado: lógica Resend dentro de `send-email`. Sem controle de quota por provider (só limite diário por domínio). |
+| 9 | Médio | Sem feature flags nem modo mock — não dá para testar carga sem gastar quota, nem desligar uma integração instável. |
+| 10 | Médio | `api_usage_logs` quase não é alimentada; não há tela de saúde de APIs. |
+| 11 | Médio | Dedup de importação cobre CNPJ/telefone; falta domínio, e-mail e nome+cidade normalizados; sem preview de "criar/atualizar/ignorar". |
+| 12 | Médio | Cadência é só e-mail. Não gera tarefas para ligação/WhatsApp/LinkedIn; parada automática ao responder não está garantida em todos os gatilhos. |
+| 13 | Baixo | Motivo de perda é texto livre no modal; falta taxonomia fixa para análise. |
+| 14 | Baixo | Métricas de gestão (conversão por etapa, tempo por etapa, no-show, por cidade/segmento/origem) inexistentes. |
 
-## Fases (mesma ordem que você pediu, validando build entre elas)
+## 2. Decisões de arquitetura
 
-### Fase 1 — Proteção da operação (baixo risco visual)
-1. **Migração DB**: índices em `leads(website)`, `leads(is_suppressed)`, `leads(place_id)`; adicionar `email_domains.daily_limit int default 500`, `daily_send_count int default 0`, `daily_count_reset_date date`.
-2. **`send-email`**: antes do envio, incrementar `daily_send_count` do domínio ativo (resetando se `daily_count_reset_date` < hoje). Se estourar `daily_limit`, marcar send como `rate_limited` e não chamar Resend — o cron `process-email-flows` reagenda no dia seguinte.
-3. **Bounce automático**: nova edge `resend-webhook` (verify_jwt=false, valida signing secret Resend) que trata `email.bounced` (hard) e `email.complained` → insere em `suppressed_emails` e marca `leads.is_suppressed=true` pelo `to_email`. Instruir você a configurar o webhook no painel do Resend (uma URL só).
-4. **Auto-enriquecimento CNPJ no import Places**: em `PlacesSearchMode.insertLeadFromPlace`, se sem CNPJ, disparar `supabase.functions.invoke('cnpj-enrich', …)` em `void`/background e atualizar o lead ao retornar. Não bloqueia a UI.
+- **Evolução, não reescrita.** `leads` continua sendo a entidade "empresa" (renomear seria destrutivo). Ganha campos de empresa (domínio, porte, funcionários, faturamento estimado, icp_score) e passa a ser pai de `lead_contacts` e `opportunities`.
+- **Funil em duas camadas:** `leads.status` (prospecção) + `opportunities.stage` (comercial). Enum atual preservado e estendido — nada é apagado.
+- **Fila no Postgres:** tabela `jobs` + pg_cron chamando um worker edge function com lote limitado, lock de execução única, retry 30s/2min/10min e circuit breaker por provider.
+- **Providers atrás de interface:** `EmailProvider`, `CnpjProvider`, `PlacesProvider`, `GeocodingProvider`, `WhatsAppProvider`, cada um com implementação real + mock, escolhidos por feature flag no banco.
 
-### Fase 2 — Cirúrgico visível
-5. **Score ICP** (`src/lib/icp-score.ts`, puro): combina rating*20 + log(reviews) + confiança de e-mail (alta=30/média=15/manual=5) + match de setor (termo pesquisado ⊂ types). Badge discreto no card + opção "Ordenar por fit" em `PlacesSearchMode`.
-6. **Indicador de e-mail em andamento**: um `<span className="inline-block h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />` ao lado do nome enquanto `enrichment.status==='loading'` naquele card específico. Sem skeleton, sem badge.
+## 3. Execução por blocos (build + tipos + testes ao fim de cada bloco)
 
-### Fase 3 — Escala de captação
-7. **Buscas salvas**: tabela `saved_searches(id, sdr_id, name, query, zone, email_filter, created_at)` com RLS por `sdr_id`. Dropdown "Buscas salvas" no header do `PlacesSearchMode` + botão "Salvar busca atual".
-8. **Import CSV de leads**: botão "Importar CSV" em `Leads.tsx`, usa `papaparse` (já leve, ~45kB), modal com mapeamento de colunas → insere em batch com dedup por CNPJ/telefone/e-mail.
+**Bloco P0 — fundação e performance**
+- Índices faltantes (`tasks`, `meetings`, `leads` compostos, `email_sends` idempotência única).
+- Tabela `jobs` + worker + pg_cron + retry/backoff + `provider_health`.
+- Tabela `feature_flags` e `provider_quota`; modo mock por flag.
+- Kanban: contagem por coluna e paginação independente, busca 100% server-side com CNPJ/telefone normalizados.
 
-### Fase 4 — Produtividade SDR
-9. **Cmd+K global**: componente `<CommandPalette/>` montado em `DashboardLayout`, listener global de `⌘/Ctrl+K`. Busca lead por nome/CNPJ (server-side, top 8), navega para colunas do funil, abre Prospecção com foco na busca.
-10. **Atalhos no detalhe do lead**: `L` liga (`tel:`), `W` WhatsApp, `1..6` muda status, `Esc` fecha. Só ativos quando modal está aberto e nenhum input focado.
-11. **Modo compacto**: toggle no header da Prospecção e Leads salvo em `localStorage.density`. Aplica `data-density="compact"` em wrapper e reduz padding/font via classes condicionais.
-12. **Filtros sticky**: `sticky top-0 z-10 bg-background/95 backdrop-blur border-b` na barra de filtros de Prospecção e Leads.
-13. **Estados vazios acionáveis**: revisar `Nenhum resultado`/`Vazio` — trocar texto por próximo passo específico.
+**Bloco P1 — modelo comercial**
+- `lead_contacts` (vários contatos por empresa, cargo, tipo, decisor) migrando `nome_decisor`.
+- `opportunities` (valor, valor mensal, probabilidade, previsão, dados da operação logística, motivo de perda) + pipeline board.
+- `next_action_at`/`next_action_type`/`next_action_owner` em leads e oportunidades, com alertas atrasado/hoje/próximo/sem ação.
+- Score ICP no banco (função + recálculo por job), classificação A/B/C.
+- Timeline unificada empresa → contatos → oportunidades → atividades.
 
-### Fase 5 — Consolidação
-14. **Code-splitting**: adicionar em `vite.config.ts` `build.rollupOptions.output.manualChunks` separando `recharts`, `@dnd-kit/*`, `@tiptap/*`. Confirmar `React.lazy` em `Dashboard`/`Automacao`.
-15. **Métricas de disparo no Dashboard**: nova aba/card com bounce rate (`suppressed_emails` criados no período ÷ enviados), taxa de resposta (`email_inbox` com `lead_id` ÷ enviados), % domínios reprovados MX.
-16. **Merge de duplicatas em Admin**: view SQL `duplicate_lead_candidates` (pares com mesmo CNPJ / telefone normalizado / domínio de e-mail). Tela em `Admin.tsx` lista pares → botão "Mesclar" (mantém mais antigo, migra timeline/activities/meetings/tasks para o vencedor, marca perdedor `is_suppressed=true` com nota).
+**Bloco P2 — produtividade do SDR**
+- Dashboard SDR operacional: metas, atividades do dia, atrasados, leads quentes (responderam, reunião pendente, follow-up atrasado).
+- Formulário de qualificação que gera oportunidade.
+- Taxonomia fixa de motivos de perda.
 
----
+**Bloco P3 — automação multicanal**
+- Motor de cadência com passos por canal (e-mail automático; ligação/WhatsApp/LinkedIn geram tarefa).
+- Parada automática em resposta, reunião, oportunidade, opt-out ou "sem interesse".
+- Fila de e-mail idempotente + quota por provider (envio fica `QUEUED` em vez de falhar).
+- `WhatsAppProvider` com fallback manual (link wa.me) registrando a atividade.
 
-## Detalhes técnicos importantes
+**Bloco P4 — gestão**
+- Views/RPCs de conversão por etapa, tempo por etapa, reunião agendada/realizada/no-show, pipeline total e ponderado.
+- Performance por SDR, origem, segmento e cidade, com filtro de período.
+- Tela de saúde de APIs (uso, quota, erros, última chamada).
 
-- **Rate limit atômico**: usar `UPDATE email_domains SET daily_send_count = CASE WHEN daily_count_reset_date < CURRENT_DATE THEN 1 ELSE daily_send_count+1 END, daily_count_reset_date = CURRENT_DATE WHERE id=? AND (daily_count_reset_date < CURRENT_DATE OR daily_send_count < daily_limit) RETURNING daily_send_count` — se não retornar linha, está no limite.
-- **Resend webhook**: requer secret novo `RESEND_WEBHOOK_SECRET` — pedirei via `add_secret` antes de codar a Fase 1.3.
-- **CSV**: usar `papaparse` (adicionar dep), streaming para arquivos grandes.
-- **Score ICP**: função pura + teste em `__tests__/icp-score.test.ts`.
-- **Merge de leads**: transação SQL como função `merge_leads(winner uuid, loser uuid)` SECURITY DEFINER restrita a admin — evita FK órfãs.
-- **Cmd+K**: reusa `Command` do shadcn (já instalado), sem lib nova.
+**Validação de carga**
+- Script de seed em modo mock: 200 / 1.000 / 5.000 leads passando por import → dedup → fila → enriquecimento → score → distribuição, medindo tempo e fila residual.
 
-## Perguntas rápidas antes de começar
+## 4. Segurança (aplicado em todos os blocos)
+- Toda tabela nova: GRANT explícito + RLS (SDR vê o que é dele, gerente vê a equipe, admin vê tudo).
+- Nenhum `sdr_id` vindo do frontend é confiável — sempre resolvido do JWT no backend.
+- Jobs e workers só via service role, protegidos por `CRON_SECRET`.
 
-1. **Fase 1 é para eu executar já sozinha** (proteção operacional) ou você quer **Fases 1+2 juntas** (proteção + score ICP visível)?
-2. **Resend webhook**: você já tem/quer criar o signing secret no painel do Resend? Se sim, posso pedir `RESEND_WEBHOOK_SECRET` via secret e você cola quando aplicar a Fase 1.
-3. **Limite diário padrão** por domínio: começo em **500/dia** (aquecimento conservador) ou você prefere outro número?
-4. **Merge de duplicatas**: mescla automática do "vencedor = mais antigo" está ok, ou você quer escolher manualmente na tela qual dos dois mantém?
+## 5. Pendências que dependem de você
+- Provider de WhatsApp (Evolution API ou outro) — arquitetura fica pronta, credenciais depois.
+- Metas por SDR (números) e faixas de faturamento/porte do ICP.
+- Confirmar se quer manter Resend ou avaliar Brevo como provider alternativo.
+
+Sugestão: aprovar e começar pelo Bloco P0, que é o que destrava os 200 leads/dia.
