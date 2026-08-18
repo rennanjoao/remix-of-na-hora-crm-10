@@ -544,6 +544,105 @@ export type Database = {
           },
         ]
       }
+      feature_flags: {
+        Row: {
+          description: string | null
+          enabled: boolean
+          key: string
+          mock_mode: boolean
+          updated_at: string
+        }
+        Insert: {
+          description?: string | null
+          enabled?: boolean
+          key: string
+          mock_mode?: boolean
+          updated_at?: string
+        }
+        Update: {
+          description?: string | null
+          enabled?: boolean
+          key?: string
+          mock_mode?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      jobs: {
+        Row: {
+          attempts: number
+          created_at: string
+          created_by: string | null
+          dedupe_key: string | null
+          finished_at: string | null
+          id: string
+          job_type: string
+          last_error: string | null
+          locked_at: string | null
+          max_attempts: number
+          next_retry_at: string | null
+          payload: Json
+          priority: number
+          scheduled_at: string
+          started_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          created_by?: string | null
+          dedupe_key?: string | null
+          finished_at?: string | null
+          id?: string
+          job_type: string
+          last_error?: string | null
+          locked_at?: string | null
+          max_attempts?: number
+          next_retry_at?: string | null
+          payload?: Json
+          priority?: number
+          scheduled_at?: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          created_by?: string | null
+          dedupe_key?: string | null
+          finished_at?: string | null
+          id?: string
+          job_type?: string
+          last_error?: string | null
+          locked_at?: string | null
+          max_attempts?: number
+          next_retry_at?: string | null
+          payload?: Json
+          priority?: number
+          scheduled_at?: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jobs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jobs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "sdr_performance_daily"
+            referencedColumns: ["sdr_id"]
+          },
+        ]
+      }
       lead_activities: {
         Row: {
           action_type: string
@@ -932,6 +1031,48 @@ export type Database = {
         }
         Relationships: []
       }
+      provider_health: {
+        Row: {
+          consecutive_failures: number
+          daily_limit: number | null
+          is_paused: boolean
+          last_error: string | null
+          last_failure_at: string | null
+          last_success_at: string | null
+          paused_until: string | null
+          provider: string
+          updated_at: string
+          usage_reset_date: string
+          used_today: number
+        }
+        Insert: {
+          consecutive_failures?: number
+          daily_limit?: number | null
+          is_paused?: boolean
+          last_error?: string | null
+          last_failure_at?: string | null
+          last_success_at?: string | null
+          paused_until?: string | null
+          provider: string
+          updated_at?: string
+          usage_reset_date?: string
+          used_today?: number
+        }
+        Update: {
+          consecutive_failures?: number
+          daily_limit?: number | null
+          is_paused?: boolean
+          last_error?: string | null
+          last_failure_at?: string | null
+          last_success_at?: string | null
+          paused_until?: string | null
+          provider?: string
+          updated_at?: string
+          usage_reset_date?: string
+          used_today?: number
+        }
+        Relationships: []
+      }
       saved_searches: {
         Row: {
           created_at: string
@@ -1129,6 +1270,34 @@ export type Database = {
       }
     }
     Functions: {
+      claim_jobs: {
+        Args: { _limit?: number; _types?: string[] }
+        Returns: {
+          attempts: number
+          created_at: string
+          created_by: string | null
+          dedupe_key: string | null
+          finished_at: string | null
+          id: string
+          job_type: string
+          last_error: string | null
+          locked_at: string | null
+          max_attempts: number
+          next_retry_at: string | null
+          payload: Json
+          priority: number
+          scheduled_at: string
+          started_at: string | null
+          status: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       claim_next_lead: {
         Args: never
         Returns: {
@@ -1173,6 +1342,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      complete_job: {
+        Args: { _error?: string; _id: string }
+        Returns: undefined
+      }
       get_profile_id: { Args: { _user_id: string }; Returns: string }
       get_sdr_performance: {
         Args: { _days?: number }
@@ -1196,6 +1369,56 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      leads_by_status: {
+        Args: {
+          _limit?: number
+          _offset?: number
+          _only_mine?: boolean
+          _search?: string
+          _status: string
+        }
+        Returns: {
+          alto_engajamento_email: boolean
+          assigned_to: string | null
+          bairro: string | null
+          cidade: string | null
+          cnae_codigo: string | null
+          cnae_descricao: string | null
+          cnpj: string | null
+          contact_outcome: Database["public"]["Enums"]["contact_outcome"] | null
+          created_at: string
+          created_by: string | null
+          email: string | null
+          estado: string | null
+          fonte: string | null
+          foto_url: string | null
+          id: string
+          is_suppressed: boolean | null
+          locked_at: string | null
+          locked_by: string | null
+          loss_reason: string | null
+          next_contact_date: string | null
+          nome_decisor: string | null
+          nome_fantasia: string | null
+          place_id: string | null
+          rating: number | null
+          razao_social: string
+          reactivation_batch: string | null
+          setor: string | null
+          status: Database["public"]["Enums"]["lead_status"] | null
+          suppression_reason: string | null
+          telefone: string | null
+          updated_at: string
+          website: string | null
+          zona: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "leads"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       leads_para_reativar: {
         Args: never
@@ -1241,10 +1464,19 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      leads_status_counts: {
+        Args: { _only_mine?: boolean; _search?: string }
+        Returns: {
+          status: string
+          total: number
+        }[]
+      }
       merge_leads: {
         Args: { _loser: string; _winner: string }
         Returns: undefined
       }
+      norm_text: { Args: { _t: string }; Returns: string }
+      only_digits: { Args: { _t: string }; Returns: string }
       sdr_work_queue: {
         Args: never
         Returns: {
@@ -1269,6 +1501,7 @@ export type Database = {
         Args: { _domain_id: string }
         Returns: boolean
       }
+      unaccent_fallback: { Args: { _t: string }; Returns: string }
     }
     Enums: {
       app_role: "admin" | "sdr" | "gerente" | "motorista"
