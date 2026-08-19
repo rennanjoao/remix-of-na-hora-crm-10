@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -247,9 +247,10 @@ export default function Leads() {
       setColCount(prev => {
         const next = { ...prev };
         const source = allLeads.find(l => l.id === leadId);
-        if (source && source.status !== patch.status) {
+        const target = patch.status as string;
+        if (source && source.status !== target) {
           next[source.status] = Math.max((next[source.status] ?? 1) - 1, 0);
-          next[patch.status] = (next[patch.status] ?? 0) + 1;
+          next[target] = (next[target] ?? 0) + 1;
         }
         return next;
       });
@@ -259,11 +260,11 @@ export default function Leads() {
 
   const updateStatus = async (leadId: string, newStatus: LeadStatus, extra?: Partial<LeadExt>) => {
     try {
-      const prev = leads.find(l => l.id === leadId);
+      const prev = allLeads.find(l => l.id === leadId);
       const patch = { status: newStatus, ...(extra || {}) };
       const { error } = await supabase.from('leads').update(patch as never).eq('id', leadId);
       if (error) throw error;
-      setLeads(p => p.map(l => l.id === leadId ? { ...l, ...patch } as LeadExt : l));
+      applyLeadPatch(leadId, patch as Partial<LeadExt>);
       if (profile) {
         await logLeadActivity({
           leadId,
@@ -307,7 +308,7 @@ export default function Leads() {
       const patch = { telefone: editPhone || null, email: editEmail || null, nome_decisor: editDecisor || null };
       const { error } = await supabase.from('leads').update(patch as never).eq('id', selectedLead.id);
       if (error) throw error;
-      setLeads(p => p.map(l => l.id === selectedLead.id ? { ...l, ...patch } as LeadExt : l));
+      applyLeadPatch(selectedLead.id, patch as Partial<LeadExt>);
       setSelectedLead({ ...selectedLead, ...patch } as LeadExt);
       if (profile) {
         const changes: string[] = [];
@@ -392,13 +393,13 @@ export default function Leads() {
     const id = e.dataTransfer.getData('text/plain') || draggingId;
     setDraggingId(null); setHoverColumn(null);
     if (!id) return;
-    const lead = leads.find(l => l.id === id);
+    const lead = allLeads.find(l => l.id === id);
     if (lead && lead.status !== col) updateStatus(id, col);
   };
 
-  const exportAll = () => downloadCSV(`leads_export_${Date.now()}.csv`, toCSV(activeLeads));
+  const exportAll = () => downloadCSV(`leads_export_${Date.now()}.csv`, toCSV(allLeads.filter(l => l.status !== 'perdido')));
   const exportColumn = (col: LeadStatus) => {
-    const list = byColumn.get(col) || [];
+    const list = colLeads[col] || [];
     const label = COLUMNS.find(c => c.id === col)?.label || col;
     downloadCSV(`leads_${label.toLowerCase().replace(/\s+/g,'_')}_${Date.now()}.csv`, toCSV(list));
   };
@@ -422,7 +423,7 @@ export default function Leads() {
                 <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">{activeFilterCount}</Badge>
               )}
             </Button>
-            <ImportLeadsCsvDialog onImported={() => fetchLeadsPage(tab, 0, false)} />
+            <ImportLeadsCsvDialog onImported={() => reloadAll()} />
             <Button variant="outline" onClick={exportAll} className="gap-2">
               <Download className="h-4 w-4" /> Exportar Todos (CSV)
             </Button>
