@@ -18,7 +18,7 @@ import { LeadActivityTimeline } from '@/components/leads/LeadActivityTimeline';
 import { ImportLeadsCsvDialog } from '@/components/leads/ImportLeadsCsvDialog';
 import {
   Loader2, Download, MoreVertical, Trash2, RotateCcw, Save, MessageSquare, Phone, Mail,
-  Building2, MapPin, Video, Plus, Trash, Filter, X, Activity,
+  Building2, MapPin, Video, Plus, Trash, Filter, X, Activity, Search,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -223,6 +223,7 @@ export default function Leads() {
 
   const allLeads = useMemo(() => Object.values(colLeads).flat(), [colLeads]);
   const discardedLeads = colLeads['perdido'] || [];
+  const pipelineTotal = COLUMNS.reduce((acc, c) => acc + (colCount[c.id] ?? 0), 0);
 
   /** Aplica alterações locais movendo o lead de coluna quando o status muda. */
   const applyLeadPatch = (leadId: string, patch: Partial<LeadExt>) => {
@@ -484,6 +485,32 @@ export default function Leads() {
           </Card>
         )}
 
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por empresa, CNPJ, telefone, cidade ou decisor..."
+              className="pl-9"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Limpar busca"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {pipelineTotal} lead{pipelineTotal === 1 ? '' : 's'} no pipeline
+            {appliedSearch && ' para esta busca'}
+          </p>
+        </div>
+
         <Tabs value={tab} onValueChange={(v) => setTab(v as 'pipeline' | 'descartados')} className="space-y-4">
           <TabsList>
             <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
@@ -493,16 +520,10 @@ export default function Leads() {
           </TabsList>
 
           <TabsContent value="pipeline">
-            {orphanLeads.length > 0 && (
-              <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
-                <strong>{orphanLeads.length}</strong> lead{orphanLeads.length > 1 ? 's' : ''} com status desconhecido não cabe{orphanLeads.length > 1 ? 'm' : ''} em nenhuma coluna do funil.
-                Status encontrados: {[...new Set(orphanLeads.map(l => l.status))].join(', ')}.
-                Ajuste o status desses leads para não ficarem invisíveis.
-              </div>
-            )}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-3">
               {COLUMNS.map(col => {
-                const items = byColumn.get(col.id) || [];
+                const items = colLeads[col.id] || [];
+                const total = colCount[col.id] ?? items.length;
                 const isHover = hoverColumn === col.id;
                 return (
                   <div
@@ -518,7 +539,7 @@ export default function Leads() {
                     <div className="flex items-center justify-between px-1 pb-2">
                       <div className="flex items-center gap-2">
                         <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-full border', col.badgeClass)}>{col.label}</span>
-                        <span className="text-xs text-muted-foreground">{items.length}</span>
+                        <span className="text-xs text-muted-foreground">{items.length} / {total}</span>
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -583,17 +604,23 @@ export default function Leads() {
                         <div className="text-center py-6 text-xs text-muted-foreground italic">Vazio</div>
                       )}
                     </div>
+                    {items.length < total && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mt-2 w-full text-xs"
+                        disabled={!!colLoading[col.id]}
+                        onClick={() => loadMoreColumn(col.id)}
+                      >
+                        {colLoading[col.id]
+                          ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Carregando...</>
+                          : `Carregar mais (${total - items.length})`}
+                      </Button>
+                    )}
                   </div>
                 );
               })}
             </div>
-            {hasMore && tab === 'pipeline' && (
-              <div className="flex justify-center pt-4">
-                <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
-                  {loadingMore ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Carregando...</> : 'Carregar mais resultados'}
-                </Button>
-              </div>
-            )}
           </TabsContent>
 
           <TabsContent value="descartados">
@@ -627,10 +654,10 @@ export default function Leads() {
                 </Card>
               ))}
             </div>
-            {hasMore && tab === 'descartados' && (
+            {discardedLeads.length < (colCount['perdido'] ?? 0) && (
               <div className="flex justify-center pt-4">
-                <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
-                  {loadingMore ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Carregando...</> : 'Carregar mais resultados'}
+                <Button variant="outline" onClick={() => loadMoreColumn('perdido')} disabled={!!colLoading['perdido']}>
+                  {colLoading['perdido'] ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Carregando...</> : 'Carregar mais resultados'}
                 </Button>
               </div>
             )}
