@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -18,7 +18,7 @@ import { LeadActivityTimeline } from '@/components/leads/LeadActivityTimeline';
 import { ImportLeadsCsvDialog } from '@/components/leads/ImportLeadsCsvDialog';
 import {
   Loader2, Download, MoreVertical, Trash2, RotateCcw, Save, MessageSquare, Phone, Mail,
-  Building2, MapPin, Video, Plus, Trash, Filter, X, Activity,
+  Building2, MapPin, Video, Plus, Trash, Filter, X, Activity, Search,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -79,15 +79,20 @@ function downloadCSV(filename: string, content: string) {
   document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 30;
 const LEAD_COLS =
   'id,cnpj,razao_social,nome_fantasia,telefone,email,cidade,estado,setor,status,created_at,updated_at,foto_url,loss_reason,bairro,nome_decisor';
 
+type ColumnKey = LeadStatus;
+type Filters = { minRating: string; uf: string; cidade: string; setor: string; dateFrom: string; dateTo: string };
+
 export default function Leads() {
   const { profile, isAdmin, isSDR } = useAuth();
-  const [leads, setLeads] = useState<LeadExt[]>([]);
+  const [colLeads, setColLeads] = useState<Record<string, LeadExt[]>>({});
+  const [colCount, setColCount] = useState<Record<string, number>>({});
+  const [colPage, setColPage] = useState<Record<string, number>>({});
+  const [colLoading, setColLoading] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [selectedLead, setSelectedLead] = useState<LeadExt | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
@@ -96,15 +101,13 @@ export default function Leads() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoverColumn, setHoverColumn] = useState<LeadStatus | null>(null);
   const [tab, setTab] = useState<'pipeline' | 'descartados'>('pipeline');
-  const [pipelinePage, setPipelinePage] = useState(0);
-  const [discardedPage, setDiscardedPage] = useState(0);
-  const [pipelineHasMore, setPipelineHasMore] = useState(true);
-  const [discardedHasMore, setDiscardedHasMore] = useState(true);
+  const [search, setSearch] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
 
   // Advanced filters
-  const emptyFilters = { minRating: '', uf: '', cidade: '', setor: '', dateFrom: '', dateTo: '' };
-  const [filters, setFilters] = useState(emptyFilters);
-  const [appliedFilters, setAppliedFilters] = useState(emptyFilters);
+  const emptyFilters: Filters = { minRating: '', uf: '', cidade: '', setor: '', dateFrom: '', dateTo: '' };
+  const [filters, setFilters] = useState<Filters>(emptyFilters);
+  const [appliedFilters, setAppliedFilters] = useState<Filters>(emptyFilters);
   const [showFilters, setShowFilters] = useState(false);
   const activeFilterCount = Object.values(appliedFilters).filter(v => v && String(v).trim() !== '').length;
 
@@ -114,53 +117,97 @@ export default function Leads() {
   const [editDecisor, setEditDecisor] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const activeStatuses: LeadStatus[] = COLUMNS.map(c => c.id);
+  // Busca com debounce (server-side)
+  useEffect(() => {
+    const t = setTimeout(() => setAppliedSearch(search.trim()), 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  const fetchLeadsPage = async (which: 'pipeline' | 'descartados', page: number, append: boolean, f = appliedFilters) => {
-    append ? setLoadingMore(true) : setLoading(true);
+  const fetchColumn = useCallback(async (
+    status: ColumnKey,
+    page: number,
+    append: boolean,
+    f: Filters,
+    s: string,
+  ) => {
+    setColLoading(prev => ({ ...prev, [status]: true }));
     try {
       const from = page * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
-      let query = supabase.from('leads').select(LEAD_COLS).order('updated_at', { ascending: false }).range(from, to);
-      query = which === 'descartados'
-        ? query.eq('status', 'perdido')
-        : query.in('status', activeStatuses);
+      let query = supabase
+        .from('leads')
+        .select(LEAD_COLS, { count: 'exact' })
+        .eq('status', status)
+        .order('updated_at', { ascending: false })
+        .range(from, from + PAGE_SIZE - 1);
+
       if (f.minRating && !Number.isNaN(Number(f.minRating))) query = query.gte('rating', Number(f.minRating));
       if (f.uf.trim()) query = query.ilike('estado', f.uf.trim());
       if (f.cidade.trim()) query = query.ilike('cidade', `%${f.cidade.trim()}%`);
       if (f.setor.trim()) query = query.ilike('setor', `%${f.setor.trim()}%`);
       if (f.dateFrom) query = query.gte('created_at', f.dateFrom);
       if (f.dateTo) query = query.lte('created_at', `${f.dateTo}T23:59:59`);
-      const { data, error } = await query;
+
+      if (s) {
+        const safe = s.replace(/[,()]/g, ' ').trim();
+        const digits = s.replace(/\D/g, '');
+        const ors = [
+          `razao_social.ilike.%${safe}%`,
+          `nome_fantasia.ilike.%${safe}%`,
+          `cidade.ilike.%${safe}%`,
+          `nome_decisor.ilike.%${safe}%`,
+        ];
+        if (digits) {
+          ors.push(`cnpj.ilike.%${digits}%`);
+          ors.push(`telefone.ilike.%${digits}%`);
+        }
+        query = query.or(ors.join(','));
+      }
+
+      const { data, error, count } = await query;
       if (error) throw error;
       const rows = (data as unknown as LeadExt[]) || [];
-      setLeads(prev => {
-        if (!append) return rows;
-        const merged = new Map(prev.map(l => [l.id, l]));
-        for (const r of rows) merged.set(r.id, r);
-        return Array.from(merged.values());
-      });
-      const hasMore = rows.length === PAGE_SIZE;
-      if (which === 'pipeline') setPipelineHasMore(hasMore);
-      else setDiscardedHasMore(hasMore);
+      setColLeads(prev => ({
+        ...prev,
+        [status]: append ? [...(prev[status] || []).filter(l => !rows.some(r => r.id === l.id)), ...rows] : rows,
+      }));
+      setColCount(prev => ({ ...prev, [status]: count ?? rows.length }));
+      setColPage(prev => ({ ...prev, [status]: page }));
     } catch (e) {
-      console.error('Error fetching leads:', e);
-      toast.error('Erro ao carregar leads', { description: e instanceof Error ? e.message : 'Erro desconhecido' });
+      console.error(`Error fetching column ${status}:`, e);
+      toast.error(`Erro ao carregar coluna ${status}`, { description: e instanceof Error ? e.message : 'Erro desconhecido' });
     } finally {
-      setLoading(false); setLoadingMore(false);
+      setColLoading(prev => ({ ...prev, [status]: false }));
     }
-  };
+  }, []);
+
+  const reloadAll = useCallback(async (
+    which: 'pipeline' | 'descartados' = tab,
+    f: Filters = appliedFilters,
+    s: string = appliedSearch,
+  ) => {
+    setLoading(true);
+    const targets: ColumnKey[] = which === 'pipeline' ? COLUMNS.map(c => c.id) : ['perdido'];
+    await Promise.all(targets.map(status => fetchColumn(status, 0, false, f, s)));
+    setLoading(false);
+  }, [tab, appliedFilters, appliedSearch, fetchColumn]);
 
   const applyFilters = () => {
     setAppliedFilters(filters);
-    setPipelinePage(0); setDiscardedPage(0);
-    fetchLeadsPage(tab, 0, false, filters);
+    reloadAll(tab, filters, appliedSearch);
   };
   const clearFilters = () => {
     setFilters(emptyFilters);
     setAppliedFilters(emptyFilters);
-    setPipelinePage(0); setDiscardedPage(0);
-    fetchLeadsPage(tab, 0, false, emptyFilters);
+    reloadAll(tab, emptyFilters, appliedSearch);
+  };
+
+  useEffect(() => {
+    reloadAll(tab, appliedFilters, appliedSearch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, appliedSearch]);
+
+  const loadMoreColumn = (status: ColumnKey) => {
+    fetchColumn(status, (colPage[status] ?? 0) + 1, true, appliedFilters, appliedSearch);
   };
 
   const fetchTimeline = async (leadId: string) => {
@@ -174,35 +221,51 @@ export default function Leads() {
     }
   };
 
-  useEffect(() => {
-    setPipelinePage(0); setDiscardedPage(0);
-    fetchLeadsPage(tab, 0, false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
+  const allLeads = useMemo(() => Object.values(colLeads).flat(), [colLeads]);
+  const discardedLeads = colLeads['perdido'] || [];
+  const pipelineTotal = COLUMNS.reduce((acc, c) => acc + (colCount[c.id] ?? 0), 0);
 
-  const loadMore = () => {
-    const nextPage = (tab === 'pipeline' ? pipelinePage : discardedPage) + 1;
-    if (tab === 'pipeline') setPipelinePage(nextPage); else setDiscardedPage(nextPage);
-    fetchLeadsPage(tab, nextPage, true);
+  /** Aplica alterações locais movendo o lead de coluna quando o status muda. */
+  const applyLeadPatch = (leadId: string, patch: Partial<LeadExt>) => {
+    setColLeads(prev => {
+      const next: Record<string, LeadExt[]> = {};
+      let moved: LeadExt | null = null;
+      for (const [key, list] of Object.entries(prev)) {
+        next[key] = list.flatMap(l => {
+          if (l.id !== leadId) return [l];
+          const updated = { ...l, ...patch } as LeadExt;
+          if (patch.status && patch.status !== l.status) { moved = updated; return []; }
+          return [updated];
+        });
+      }
+      if (moved && patch.status) {
+        const target = patch.status as string;
+        next[target] = [moved, ...(next[target] || [])];
+      }
+      return next;
+    });
+    if (patch.status) {
+      setColCount(prev => {
+        const next = { ...prev };
+        const source = allLeads.find(l => l.id === leadId);
+        const target = patch.status as string;
+        if (source && source.status !== target) {
+          next[source.status] = Math.max((next[source.status] ?? 1) - 1, 0);
+          next[target] = (next[target] ?? 0) + 1;
+        }
+        return next;
+      });
+    }
   };
 
-  const hasMore = tab === 'pipeline' ? pipelineHasMore : discardedHasMore;
-
-  const activeLeads = useMemo(() => leads.filter(l => l.status !== 'perdido'), [leads]);
-  const discardedLeads = useMemo(() => leads.filter(l => l.status === 'perdido'), [leads]);
-
-  const { byColumn, orphans: orphanLeads } = useMemo(
-    () => groupLeadsByColumn<LeadExt>(activeLeads, COLUMNS),
-    [activeLeads],
-  );
 
   const updateStatus = async (leadId: string, newStatus: LeadStatus, extra?: Partial<LeadExt>) => {
     try {
-      const prev = leads.find(l => l.id === leadId);
+      const prev = allLeads.find(l => l.id === leadId);
       const patch = { status: newStatus, ...(extra || {}) };
       const { error } = await supabase.from('leads').update(patch as never).eq('id', leadId);
       if (error) throw error;
-      setLeads(p => p.map(l => l.id === leadId ? { ...l, ...patch } as LeadExt : l));
+      applyLeadPatch(leadId, patch as Partial<LeadExt>);
       if (profile) {
         await logLeadActivity({
           leadId,
@@ -246,7 +309,7 @@ export default function Leads() {
       const patch = { telefone: editPhone || null, email: editEmail || null, nome_decisor: editDecisor || null };
       const { error } = await supabase.from('leads').update(patch as never).eq('id', selectedLead.id);
       if (error) throw error;
-      setLeads(p => p.map(l => l.id === selectedLead.id ? { ...l, ...patch } as LeadExt : l));
+      applyLeadPatch(selectedLead.id, patch as Partial<LeadExt>);
       setSelectedLead({ ...selectedLead, ...patch } as LeadExt);
       if (profile) {
         const changes: string[] = [];
@@ -331,13 +394,13 @@ export default function Leads() {
     const id = e.dataTransfer.getData('text/plain') || draggingId;
     setDraggingId(null); setHoverColumn(null);
     if (!id) return;
-    const lead = leads.find(l => l.id === id);
+    const lead = allLeads.find(l => l.id === id);
     if (lead && lead.status !== col) updateStatus(id, col);
   };
 
-  const exportAll = () => downloadCSV(`leads_export_${Date.now()}.csv`, toCSV(activeLeads));
+  const exportAll = () => downloadCSV(`leads_export_${Date.now()}.csv`, toCSV(allLeads.filter(l => l.status !== 'perdido')));
   const exportColumn = (col: LeadStatus) => {
-    const list = byColumn.get(col) || [];
+    const list = colLeads[col] || [];
     const label = COLUMNS.find(c => c.id === col)?.label || col;
     downloadCSV(`leads_${label.toLowerCase().replace(/\s+/g,'_')}_${Date.now()}.csv`, toCSV(list));
   };
@@ -361,7 +424,7 @@ export default function Leads() {
                 <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">{activeFilterCount}</Badge>
               )}
             </Button>
-            <ImportLeadsCsvDialog onImported={() => fetchLeadsPage(tab, 0, false)} />
+            <ImportLeadsCsvDialog onImported={() => reloadAll()} />
             <Button variant="outline" onClick={exportAll} className="gap-2">
               <Download className="h-4 w-4" /> Exportar Todos (CSV)
             </Button>
@@ -422,6 +485,32 @@ export default function Leads() {
           </Card>
         )}
 
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por empresa, CNPJ, telefone, cidade ou decisor..."
+              className="pl-9"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Limpar busca"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {pipelineTotal} lead{pipelineTotal === 1 ? '' : 's'} no pipeline
+            {appliedSearch && ' para esta busca'}
+          </p>
+        </div>
+
         <Tabs value={tab} onValueChange={(v) => setTab(v as 'pipeline' | 'descartados')} className="space-y-4">
           <TabsList>
             <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
@@ -431,16 +520,10 @@ export default function Leads() {
           </TabsList>
 
           <TabsContent value="pipeline">
-            {orphanLeads.length > 0 && (
-              <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
-                <strong>{orphanLeads.length}</strong> lead{orphanLeads.length > 1 ? 's' : ''} com status desconhecido não cabe{orphanLeads.length > 1 ? 'm' : ''} em nenhuma coluna do funil.
-                Status encontrados: {[...new Set(orphanLeads.map(l => l.status))].join(', ')}.
-                Ajuste o status desses leads para não ficarem invisíveis.
-              </div>
-            )}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-3">
               {COLUMNS.map(col => {
-                const items = byColumn.get(col.id) || [];
+                const items = colLeads[col.id] || [];
+                const total = colCount[col.id] ?? items.length;
                 const isHover = hoverColumn === col.id;
                 return (
                   <div
@@ -456,7 +539,7 @@ export default function Leads() {
                     <div className="flex items-center justify-between px-1 pb-2">
                       <div className="flex items-center gap-2">
                         <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-full border', col.badgeClass)}>{col.label}</span>
-                        <span className="text-xs text-muted-foreground">{items.length}</span>
+                        <span className="text-xs text-muted-foreground">{items.length} / {total}</span>
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -521,17 +604,23 @@ export default function Leads() {
                         <div className="text-center py-6 text-xs text-muted-foreground italic">Vazio</div>
                       )}
                     </div>
+                    {items.length < total && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mt-2 w-full text-xs"
+                        disabled={!!colLoading[col.id]}
+                        onClick={() => loadMoreColumn(col.id)}
+                      >
+                        {colLoading[col.id]
+                          ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Carregando...</>
+                          : `Carregar mais (${total - items.length})`}
+                      </Button>
+                    )}
                   </div>
                 );
               })}
             </div>
-            {hasMore && tab === 'pipeline' && (
-              <div className="flex justify-center pt-4">
-                <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
-                  {loadingMore ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Carregando...</> : 'Carregar mais resultados'}
-                </Button>
-              </div>
-            )}
           </TabsContent>
 
           <TabsContent value="descartados">
@@ -565,10 +654,10 @@ export default function Leads() {
                 </Card>
               ))}
             </div>
-            {hasMore && tab === 'descartados' && (
+            {discardedLeads.length < (colCount['perdido'] ?? 0) && (
               <div className="flex justify-center pt-4">
-                <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
-                  {loadingMore ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Carregando...</> : 'Carregar mais resultados'}
+                <Button variant="outline" onClick={() => loadMoreColumn('perdido')} disabled={!!colLoading['perdido']}>
+                  {colLoading['perdido'] ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Carregando...</> : 'Carregar mais resultados'}
                 </Button>
               </div>
             )}
